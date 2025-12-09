@@ -1,0 +1,9 @@
+click>=8.0.0
+rich>=13.0.0
+pyyaml>=6.0
+tomli>=2.0.0
+py-solc-x>=2.0.0
+packaging>=21.0
+eth-utils>=2.0.0
+web3>=6.0.0
+
