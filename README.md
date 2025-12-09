@@ -39,12 +39,7 @@ deployguard verify 0x1234...5678 \
 
 ## Documentation
 
-See the [specs/](specs/) directory for complete technical specifications:
-
-- [Architecture Overview](specs/00_architecture_overview.md)
-- [Data Models](specs/01_data_models.md)
-- [CLI Interface](specs/05_cli_interface.md)
-- [Full Specs Index](specs/README.md)
+TBD
 
 ## License
 
