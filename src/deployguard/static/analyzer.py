@@ -6,19 +6,18 @@ Foundry deployment scripts.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Optional
 
 from deployguard.config import DeployGuardConfig
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import (
+    BoundaryType,
     ProxyDeployment,
     ScriptAnalysis,
     TransactionBoundary,
-    BoundaryType,
 )
 from deployguard.static.parsers.foundry import FoundryScriptParser
-
 
 # Built-in static rules
 RULE_DG_001 = Rule(
@@ -69,7 +68,7 @@ class StaticAnalyzer:
     potential vulnerabilities and issues.
     """
 
-    def __init__(self, config: Optional[DeployGuardConfig] = None) -> None:
+    def __init__(self, config: DeployGuardConfig | None = None) -> None:
         """Initialize the static analyzer.
 
         Args:
@@ -140,9 +139,7 @@ class StaticAnalyzer:
 
         return violations
 
-    def _check_non_atomic_init(
-        self, deployment: ProxyDeployment
-    ) -> Optional[RuleViolation]:
+    def _check_non_atomic_init(self, deployment: ProxyDeployment) -> RuleViolation | None:
         """Check for non-atomic proxy initialization (DG-001).
 
         Args:
@@ -173,7 +170,7 @@ class StaticAnalyzer:
         self,
         deployment: ProxyDeployment,
         boundaries: list[TransactionBoundary],
-    ) -> Optional[RuleViolation]:
+    ) -> RuleViolation | None:
         """Check for separated deployment and initialization (DG-002).
 
         This checks if the proxy is deployed with empty init data but
@@ -195,17 +192,9 @@ class StaticAnalyzer:
 
         # Count how many broadcast scopes exist
         start_broadcasts = [
-            b for b in boundaries
-            if b.boundary_type == BoundaryType.VM_START_BROADCAST
+            b for b in boundaries if b.boundary_type == BoundaryType.VM_START_BROADCAST
         ]
-        stop_broadcasts = [
-            b for b in boundaries
-            if b.boundary_type == BoundaryType.VM_STOP_BROADCAST
-        ]
-        single_broadcasts = [
-            b for b in boundaries
-            if b.boundary_type == BoundaryType.VM_BROADCAST
-        ]
+        single_broadcasts = [b for b in boundaries if b.boundary_type == BoundaryType.VM_BROADCAST]
 
         # If there are multiple broadcast scopes, the init might be in a different one
         if len(start_broadcasts) > 1 or len(single_broadcasts) > 1:
@@ -232,7 +221,7 @@ class StaticAnalyzer:
 
     def _check_hardcoded_impl(
         self, deployment: ProxyDeployment, analysis: ScriptAnalysis
-    ) -> Optional[RuleViolation]:
+    ) -> RuleViolation | None:
         """Check for hardcoded implementation address (DG-003).
 
         Args:
@@ -245,7 +234,6 @@ class StaticAnalyzer:
         impl_arg = deployment.implementation_arg
 
         # Check if it's a literal address (0x followed by 40 hex chars)
-        import re
         if re.match(r"^0x[a-fA-F0-9]{40}$", impl_arg.strip()):
             return RuleViolation(
                 rule=RULE_DG_003,
@@ -256,7 +244,7 @@ class StaticAnalyzer:
                     "  Implementation impl = new Implementation();\n"
                     "  new Proxy(address(impl), initData);\n"
                     "Or use an environment variable:\n"
-                    "  address impl = vm.envAddress(\"IMPL_ADDRESS\");"
+                    '  address impl = vm.envAddress("IMPL_ADDRESS");'
                 ),
                 location=deployment.location,
                 context={"hardcoded_address": impl_arg},
@@ -290,7 +278,7 @@ class StaticAnalyzer:
 
     def _check_impl_validation(
         self, deployment: ProxyDeployment, analysis: ScriptAnalysis
-    ) -> Optional[RuleViolation]:
+    ) -> RuleViolation | None:
         """Check for missing implementation validation (DG-004).
 
         Args:
@@ -332,17 +320,15 @@ class StaticAnalyzer:
             message=f"Implementation address '{impl_arg}' used without validation",
             recommendation=(
                 "Add validation before using the implementation address:\n"
-                f"  require({var_name}.code.length > 0, \"Implementation not a contract\");\n"
-                f"  require({var_name} != address(0), \"Implementation cannot be zero\");"
+                f'  require({var_name}.code.length > 0, "Implementation not a contract");\n'
+                f'  require({var_name} != address(0), "Implementation cannot be zero");'
             ),
             location=deployment.location,
             context={"implementation_arg": impl_arg},
         )
 
 
-def analyze_script(
-    file_path: str, config: Optional[DeployGuardConfig] = None
-) -> ScriptAnalysis:
+def analyze_script(file_path: str, config: DeployGuardConfig | None = None) -> ScriptAnalysis:
     """Analyze a Foundry deployment script for vulnerabilities.
 
     Args:
@@ -361,7 +347,7 @@ def analyze_script(
 
 
 def run_static_rules(
-    analysis: ScriptAnalysis, rules: Optional[list[Rule]] = None
+    analysis: ScriptAnalysis, rules: list[Rule] | None = None
 ) -> list[RuleViolation]:
     """Run static analysis rules against parsed script.
 

@@ -118,9 +118,7 @@ class FoundryScriptParser:
                     if error.get("severity") == "error":
                         analysis.parse_errors.append(error.get("formattedMessage", ""))
                     else:
-                        analysis.parse_warnings.append(
-                            error.get("formattedMessage", "")
-                        )
+                        analysis.parse_warnings.append(error.get("formattedMessage", ""))
 
             # Extract AST
             if "sources" in output and file_path in output["sources"]:
@@ -147,9 +145,7 @@ class FoundryScriptParser:
             if node.get("nodeType") == "ContractDefinition":
                 self._analyze_contract(node, analysis)
 
-    def _analyze_contract(
-        self, contract: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _analyze_contract(self, contract: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Analyze a contract for deployment patterns.
 
         Args:
@@ -160,9 +156,7 @@ class FoundryScriptParser:
             if node.get("nodeType") == "FunctionDefinition":
                 self._analyze_function(node, analysis)
 
-    def _analyze_function(
-        self, func: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _analyze_function(self, func: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Analyze a function for deployment patterns.
 
         Looks for:
@@ -211,35 +205,25 @@ class FoundryScriptParser:
             elif node_type == "IfStatement":
                 true_body = stmt.get("trueBody", {})
                 if true_body.get("nodeType") == "Block":
-                    self._traverse_statements(
-                        true_body.get("statements", []), analysis
-                    )
+                    self._traverse_statements(true_body.get("statements", []), analysis)
                 false_body = stmt.get("falseBody")
                 if false_body:
                     if false_body.get("nodeType") == "Block":
-                        self._traverse_statements(
-                            false_body.get("statements", []), analysis
-                        )
+                        self._traverse_statements(false_body.get("statements", []), analysis)
 
             # Recurse into for loops
             elif node_type == "ForStatement":
                 loop_body = stmt.get("body", {})
                 if loop_body.get("nodeType") == "Block":
-                    self._traverse_statements(
-                        loop_body.get("statements", []), analysis
-                    )
+                    self._traverse_statements(loop_body.get("statements", []), analysis)
 
             # Recurse into while loops
             elif node_type == "WhileStatement":
                 loop_body = stmt.get("body", {})
                 if loop_body.get("nodeType") == "Block":
-                    self._traverse_statements(
-                        loop_body.get("statements", []), analysis
-                    )
+                    self._traverse_statements(loop_body.get("statements", []), analysis)
 
-    def _check_broadcast_call(
-        self, expr: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _check_broadcast_call(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check if expression is a vm.broadcast() call.
 
         Args:
@@ -270,9 +254,7 @@ class FoundryScriptParser:
                 )
                 analysis.tx_boundaries.append(boundary)
 
-    def _check_proxy_deployment(
-        self, expr: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _check_proxy_deployment(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check if expression is a proxy contract deployment.
 
         Args:
@@ -305,9 +287,7 @@ class FoundryScriptParser:
                 )
                 analysis.proxy_deployments.append(deployment)
 
-    def _check_private_key_env(
-        self, expr: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _check_private_key_env(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check for vm.envUint("PRIVATE_KEY") pattern.
 
         Args:
@@ -335,9 +315,7 @@ class FoundryScriptParser:
                     if "PRIVATE_KEY" in arg_source.upper():
                         analysis.has_private_key_env = True
 
-    def _check_ownership_transfer(
-        self, expr: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _check_ownership_transfer(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check for transferOwnership() calls.
 
         Args:
@@ -457,9 +435,7 @@ class FoundryScriptParser:
 
         # Get line content
         line_content = (
-            self.source_lines[line_number - 1]
-            if line_number <= len(self.source_lines)
-            else ""
+            self.source_lines[line_number - 1] if line_number <= len(self.source_lines) else ""
         )
 
         return SourceLocation(
@@ -504,9 +480,7 @@ class FoundryScriptParser:
         }
         return mapping.get(func_name, BoundaryType.VM_BROADCAST)
 
-    def _track_variable_assignment(
-        self, stmt: dict[str, Any], analysis: ScriptAnalysis
-    ) -> None:
+    def _track_variable_assignment(self, stmt: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Track variable assignments for data flow analysis."""
         # Extract variable declarations
         declarations = stmt.get("declarations", [])
