@@ -1,6 +1,6 @@
 """Bytecode analyzer for contract bytecode analysis."""
 
-import hashlib
+from eth_utils import keccak
 
 from deployguard.constants import (
     OPCODE_CREATE,
@@ -41,8 +41,6 @@ class BytecodeAnalyzer:
         bytecode_bytes = bytes.fromhex(bytecode_hex)
 
         # Calculate bytecode hash (keccak256)
-        # Note: Should use eth-utils or pycryptodome for keccak256
-        # Using SHA256 as placeholder - replace with keccak256 in production
         bytecode_hash = self._calculate_hash(bytecode_bytes)
 
         # Scan for opcodes
@@ -88,10 +86,8 @@ class BytecodeAnalyzer:
         Returns:
             Hash as hex string (0x-prefixed)
         """
-        # Use hashlib for keccak256 (or eth-utils if available)
-        # For now, using SHA256 as placeholder - should use keccak256
-        hash_obj = hashlib.sha256(bytecode_bytes)
-        return "0x" + hash_obj.hexdigest()
+        hash_bytes = keccak(bytecode_bytes)
+        return "0x" + hash_bytes.hex()
 
     def _is_eip1167_proxy(self, bytecode_bytes: bytes) -> bool:
         """Check if bytecode matches EIP-1167 minimal proxy pattern.

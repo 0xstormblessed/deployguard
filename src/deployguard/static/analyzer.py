@@ -123,7 +123,7 @@ class StaticAnalyzer:
                 violations.append(violation)
 
             # DG-002: Separated Deploy and Initialize
-            violation = self._check_separated_init(deployment, analysis.tx_boundaries)
+            violation = self._check_separated_init(deployment, analysis)
             if violation:
                 violations.append(violation)
 
@@ -169,17 +169,16 @@ class StaticAnalyzer:
     def _check_separated_init(
         self,
         deployment: ProxyDeployment,
-        boundaries: list[TransactionBoundary],
+        analysis: ScriptAnalysis,
     ) -> RuleViolation | None:
         """Check for separated deployment and initialization (DG-002).
 
-        This checks if the proxy is deployed with empty init data but
-        there are multiple transaction boundaries, suggesting separate
-        deploy and init transactions.
+        This checks if the proxy deployment and its initialization call
+        occur in different transaction scopes.
 
         Args:
             deployment: Proxy deployment to check
-            boundaries: Transaction boundaries in the script
+            analysis: Full script analysis with boundaries and function calls
 
         Returns:
             RuleViolation if separated init detected
@@ -187,16 +186,57 @@ class StaticAnalyzer:
         if not deployment.has_empty_init:
             return None
 
-        # Find transaction boundaries around this deployment
+        # Find transaction scope for deployment
         deploy_line = deployment.location.line_number
+        deploy_scope = self._find_tx_scope(deploy_line, analysis.tx_boundaries)
 
-        # Count how many broadcast scopes exist
+        # If we have a proxy variable, look for initialize() calls on it
+        if deployment.proxy_variable:
+            # Find initialize() calls on this proxy variable
+            init_calls = [
+                call
+                for call in analysis.function_calls
+                if call.receiver == deployment.proxy_variable and call.function_name == "initialize"
+            ]
+
+            # Check if any init call is in a different scope
+            for init_call in init_calls:
+                init_scope = self._find_tx_scope(
+                    init_call.location.line_number, analysis.tx_boundaries
+                )
+
+                # If scopes differ, flag it
+                if deploy_scope != init_scope:
+                    return RuleViolation(
+                        rule=RULE_DG_002,
+                        severity=Severity.HIGH,
+                        message=(
+                            f"Proxy deployment at line {deploy_line} and initialization "
+                            f"at line {init_call.location.line_number} are in different transaction scopes"
+                        ),
+                        recommendation=(
+                            "Ensure proxy deployment and initialization occur within "
+                            "the same vm.broadcast scope, or use atomic initialization "
+                            "by passing init data to the proxy constructor."
+                        ),
+                        location=deployment.location,
+                        context={
+                            "deploy_line": deploy_line,
+                            "init_line": init_call.location.line_number,
+                            "deploy_scope": deploy_scope,
+                            "init_scope": init_scope,
+                        },
+                    )
+
+        # If no proxy variable or no init calls found, fall back to heuristic
+        # Check if multiple broadcast scopes exist
         start_broadcasts = [
-            b for b in boundaries if b.boundary_type == BoundaryType.VM_START_BROADCAST
+            b for b in analysis.tx_boundaries if b.boundary_type == BoundaryType.VM_START_BROADCAST
         ]
-        single_broadcasts = [b for b in boundaries if b.boundary_type == BoundaryType.VM_BROADCAST]
+        single_broadcasts = [
+            b for b in analysis.tx_boundaries if b.boundary_type == BoundaryType.VM_BROADCAST
+        ]
 
-        # If there are multiple broadcast scopes, the init might be in a different one
         if len(start_broadcasts) > 1 or len(single_broadcasts) > 1:
             return RuleViolation(
                 rule=RULE_DG_002,
@@ -216,6 +256,37 @@ class StaticAnalyzer:
                     "num_broadcast_scopes": len(start_broadcasts) + len(single_broadcasts),
                 },
             )
+
+        return None
+
+    def _find_tx_scope(
+        self, line_number: int, boundaries: list[TransactionBoundary]
+    ) -> tuple[int, int] | None:
+        """Find which transaction scope a line belongs to.
+
+        Args:
+            line_number: Line to check
+            boundaries: Transaction boundaries
+
+        Returns:
+            Tuple of (scope_start, scope_end) or None if not in any scope
+        """
+        # Check vm.startBroadcast/stopBroadcast scopes first
+        for boundary in boundaries:
+            if boundary.boundary_type == BoundaryType.VM_START_BROADCAST:
+                scope_start = boundary.scope_start
+                scope_end = boundary.scope_end
+
+                if scope_end and scope_start <= line_number <= scope_end:
+                    return (scope_start, scope_end)
+
+        # Check vm.broadcast() single-line scopes
+        # vm.broadcast() affects the next statement only
+        for boundary in boundaries:
+            if boundary.boundary_type == BoundaryType.VM_BROADCAST:
+                # Assume next line is in scope (simple heuristic)
+                if boundary.scope_start + 1 == line_number:
+                    return (boundary.scope_start, boundary.scope_start + 1)
 
         return None
 

@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Optional
 
 from deployguard.models.core import SourceLocation
 
@@ -45,7 +44,7 @@ class VariableInfo:
     """
 
     name: str
-    assigned_value: Optional[str] = None
+    assigned_value: str | None = None
     assignment_location: SourceLocation = field(default_factory=lambda: SourceLocation("", 1))
     is_hardcoded: bool = False
     is_validated: bool = False
@@ -65,7 +64,7 @@ class TransactionBoundary:
     boundary_type: BoundaryType
     location: SourceLocation
     scope_start: int
-    scope_end: Optional[int] = None
+    scope_end: int | None = None
 
 
 @dataclass
@@ -77,6 +76,7 @@ class ProxyDeployment:
         implementation_arg: Implementation address/variable
         init_data_arg: Initialization data argument
         location: Where deployment occurs
+        proxy_variable: Variable name holding the proxy (if assigned to variable)
         has_empty_init: True if init data is empty/0x
         is_atomic: True if deploy+init in same tx
         tx_boundary_before: vm.broadcast location before deployment
@@ -87,10 +87,26 @@ class ProxyDeployment:
     implementation_arg: str
     init_data_arg: str
     location: SourceLocation
+    proxy_variable: str | None = None
     has_empty_init: bool = False
     is_atomic: bool = False
-    tx_boundary_before: Optional[SourceLocation] = None
-    tx_boundary_after: Optional[SourceLocation] = None
+    tx_boundary_before: SourceLocation | None = None
+    tx_boundary_after: SourceLocation | None = None
+
+
+@dataclass
+class FunctionCall:
+    """Represents a function call detected in the script.
+
+    Attributes:
+        receiver: Variable/contract receiving the call (e.g., "proxy")
+        function_name: Name of function being called (e.g., "initialize")
+        location: Where the call occurs
+    """
+
+    receiver: str
+    function_name: str
+    location: SourceLocation
 
 
 @dataclass
@@ -103,6 +119,7 @@ class ScriptAnalysis:
         proxy_deployments: List of detected proxy deployments
         tx_boundaries: List of transaction boundaries
         implementation_variables: Variables that may contain implementation addresses
+        function_calls: List of function calls (for tracking initialize() calls)
         has_private_key_env: Uses vm.envUint("PRIVATE_KEY")
         has_ownership_transfer: Calls transferOwnership()
         parse_errors: List of parse errors encountered
@@ -114,8 +131,8 @@ class ScriptAnalysis:
     proxy_deployments: list[ProxyDeployment] = field(default_factory=list)
     tx_boundaries: list[TransactionBoundary] = field(default_factory=list)
     implementation_variables: dict[str, VariableInfo] = field(default_factory=dict)
+    function_calls: list[FunctionCall] = field(default_factory=list)
     has_private_key_env: bool = False
     has_ownership_transfer: bool = False
     parse_errors: list[str] = field(default_factory=list)
     parse_warnings: list[str] = field(default_factory=list)
-
