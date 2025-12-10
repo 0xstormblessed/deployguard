@@ -1,12 +1,14 @@
 """Dynamic analyzer for on-chain proxy verification."""
 
-from typing import Optional
+import uuid
 
 from deployguard.constants import (
     EIP1967_ADMIN_SLOT,
     EIP1967_BEACON_SLOT,
     EIP1967_IMPLEMENTATION_SLOT,
 )
+from deployguard.dynamic.bytecode import BytecodeAnalyzer
+from deployguard.dynamic.rpc_client import RPCClient
 from deployguard.models.core import Address, StorageSlot
 from deployguard.models.dynamic import (
     BytecodeAnalysis,
@@ -15,8 +17,15 @@ from deployguard.models.dynamic import (
     ProxyVerification,
     StorageSlotResult,
 )
-from deployguard.dynamic.bytecode import BytecodeAnalyzer
-from deployguard.dynamic.rpc_client import RPCClient
+from deployguard.models.report import AnalysisReport, AnalysisType, Finding, ReportSummary
+from deployguard.models.rules import RuleViolation
+from deployguard.rules.dynamic import (
+    check_admin_mismatch,
+    check_implementation_mismatch,
+    check_non_standard_proxy,
+    check_shadow_contract,
+    check_uninitialized_proxy,
+)
 
 
 class DynamicAnalyzer:
@@ -38,9 +47,7 @@ class DynamicAnalyzer:
         self.rpc_client = rpc_client
         self.bytecode_analyzer = BytecodeAnalyzer()
 
-    async def verify_proxy(
-        self, verification: ProxyVerification
-    ) -> ProxyState:
+    async def verify_proxy(self, verification: ProxyVerification) -> ProxyState:
         """Verify proxy contract state.
 
         Args:
@@ -51,12 +58,10 @@ class DynamicAnalyzer:
         """
         # Query implementation slot
         impl_slot = StorageSlot(EIP1967_IMPLEMENTATION_SLOT)
-        impl_result = await self.rpc_client.get_storage_at(
-            verification.proxy_address, impl_slot
-        )
+        impl_result = await self.rpc_client.get_storage_at(verification.proxy_address, impl_slot)
 
         # Query admin slot if requested
-        admin_result: Optional[StorageSlotResult] = None
+        admin_result: StorageSlotResult | None = None
         if verification.expected_admin is not None:
             admin_slot = StorageSlot(EIP1967_ADMIN_SLOT)
             admin_result = await self.rpc_client.get_storage_at(
@@ -64,7 +69,7 @@ class DynamicAnalyzer:
             )
 
         # Query beacon slot if requested
-        beacon_result: Optional[StorageSlotResult] = None
+        beacon_result: StorageSlotResult | None = None
         if verification.check_beacon:
             beacon_slot = StorageSlot(EIP1967_BEACON_SLOT)
             beacon_result = await self.rpc_client.get_storage_at(
@@ -72,21 +77,15 @@ class DynamicAnalyzer:
             )
 
         # Get proxy bytecode
-        proxy_bytecode = await self.rpc_client.get_code(
-            verification.proxy_address
-        )
+        proxy_bytecode = await self.rpc_client.get_code(verification.proxy_address)
 
         # Get implementation bytecode if available
-        impl_bytecode: Optional[str] = None
+        impl_bytecode: str | None = None
         if impl_result.decoded_address:
-            impl_bytecode = await self.rpc_client.get_code(
-                impl_result.decoded_address
-            )
+            impl_bytecode = await self.rpc_client.get_code(impl_result.decoded_address)
 
         # Detect proxy standard
-        proxy_standard = self._detect_proxy_standard(
-            impl_result, admin_result, beacon_result
-        )
+        proxy_standard = self._detect_proxy_standard(impl_result, admin_result, beacon_result)
 
         # Check if initialized
         is_initialized = self._is_initialized(impl_result)
@@ -102,9 +101,7 @@ class DynamicAnalyzer:
             is_initialized=is_initialized,
         )
 
-    async def analyze_bytecode(
-        self, address: Address, bytecode: str
-    ) -> BytecodeAnalysis:
+    async def analyze_bytecode(self, address: Address, bytecode: str) -> BytecodeAnalysis:
         """Analyze contract bytecode.
 
         Args:
@@ -119,8 +116,8 @@ class DynamicAnalyzer:
     def _detect_proxy_standard(
         self,
         impl_result: StorageSlotResult,
-        admin_result: Optional[StorageSlotResult],
-        beacon_result: Optional[StorageSlotResult],
+        admin_result: StorageSlotResult | None,
+        beacon_result: StorageSlotResult | None,
     ) -> ProxyStandard:
         """Detect proxy standard from storage slots.
 
@@ -156,3 +153,205 @@ class DynamicAnalyzer:
         zero_slot = "0x" + "0" * 64
         return impl_result.value != zero_slot and impl_result.decoded_address is not None
 
+
+async def quick_check(
+    proxy_address: Address,
+    expected_implementation: Address,
+    rpc_url: str,
+) -> bool:
+    """Quick pass/fail check for proxy implementation.
+
+    Args:
+        proxy_address: Address of proxy contract
+        expected_implementation: Expected implementation address
+        rpc_url: RPC endpoint URL
+
+    Returns:
+        True if implementation matches, False otherwise
+    """
+    async with RPCClient(rpc_url) as rpc_client:
+        analyzer = DynamicAnalyzer(rpc_client)
+        verification = ProxyVerification(
+            proxy_address=proxy_address,
+            expected_implementation=expected_implementation,
+            rpc_url=rpc_url,
+        )
+        proxy_state = await analyzer.verify_proxy(verification)
+        actual_impl = proxy_state.implementation_slot.decoded_address
+
+        if not actual_impl:
+            return False
+
+        return actual_impl.lower() == expected_implementation.lower()
+
+
+async def get_implementation_address(proxy_address: Address, rpc_url: str) -> Address | None:
+    """Get the current implementation address of a proxy.
+
+    Args:
+        proxy_address: Address of proxy contract
+        rpc_url: RPC endpoint URL
+
+    Returns:
+        Implementation address if found, None if slot is empty or proxy standard unknown
+    """
+    async with RPCClient(rpc_url) as rpc_client:
+        impl_slot = StorageSlot(EIP1967_IMPLEMENTATION_SLOT)
+        impl_result = await rpc_client.get_storage_at(proxy_address, impl_slot)
+        return impl_result.decoded_address
+
+
+def _violation_to_finding(violation: RuleViolation, finding_id: str) -> Finding:
+    """Convert RuleViolation to Finding.
+
+    Args:
+        violation: Rule violation to convert
+        finding_id: Unique finding ID
+
+    Returns:
+        Finding object
+    """
+    # Build on-chain evidence from storage/bytecode data
+    on_chain_evidence: dict | None = None
+    if violation.storage_data or violation.bytecode_data:
+        on_chain_evidence = {}
+        if violation.storage_data:
+            on_chain_evidence["storage_slot"] = {
+                "slot": str(violation.storage_data.query.slot),
+                "value": str(violation.storage_data.value),
+                "decoded_address": (
+                    str(violation.storage_data.decoded_address)
+                    if violation.storage_data.decoded_address
+                    else None
+                ),
+                "block_number": violation.storage_data.block_number,
+            }
+        if violation.bytecode_data:
+            on_chain_evidence["bytecode"] = {
+                "address": str(violation.bytecode_data.address),
+                "has_delegatecall": violation.bytecode_data.has_delegatecall,
+                "has_selfdestruct": violation.bytecode_data.has_selfdestruct,
+                "is_proxy_pattern": violation.bytecode_data.is_proxy_pattern,
+                "risk_indicators": violation.bytecode_data.risk_indicators,
+            }
+        if violation.context:
+            on_chain_evidence["context"] = violation.context
+
+    return Finding(
+        id=finding_id,
+        rule_id=violation.rule.rule_id,
+        title=violation.rule.name,
+        description=violation.message,
+        severity=violation.severity,
+        recommendation=violation.recommendation,
+        on_chain_evidence=on_chain_evidence,
+    )
+
+
+async def verify_proxy(
+    proxy_address: Address,
+    expected_implementation: Address,
+    rpc_url: str,
+    expected_admin: Address | None = None,
+) -> AnalysisReport:
+    """Verify a proxy contract's on-chain state and run all dynamic rules.
+
+    Args:
+        proxy_address: Address of the proxy contract
+        expected_implementation: Expected implementation address
+        rpc_url: RPC endpoint URL
+        expected_admin: Optional expected admin address
+
+    Returns:
+        AnalysisReport with findings from all dynamic rules
+
+    Raises:
+        RPCError: If RPC calls fail
+    """
+    async with RPCClient(rpc_url) as rpc_client:
+        analyzer = DynamicAnalyzer(rpc_client)
+        verification = ProxyVerification(
+            proxy_address=proxy_address,
+            expected_implementation=expected_implementation,
+            rpc_url=rpc_url,
+            expected_admin=expected_admin,
+        )
+
+        # Get proxy state
+        proxy_state = await analyzer.verify_proxy(verification)
+
+        # Run all dynamic rules
+        violations: list[RuleViolation] = []
+
+        # DG-101: Implementation mismatch
+        violation = check_implementation_mismatch(proxy_state, expected_implementation)
+        if violation:
+            violations.append(violation)
+
+        # DG-103: Uninitialized proxy (check before shadow contract)
+        violation = check_uninitialized_proxy(proxy_state)
+        if violation:
+            violations.append(violation)
+
+        # DG-102: Shadow contract (only if implementation exists)
+        if proxy_state.implementation_bytecode:
+            impl_bytecode_analysis = await analyzer.analyze_bytecode(
+                proxy_state.implementation_slot.decoded_address or proxy_address,
+                proxy_state.implementation_bytecode,
+            )
+            violation = check_shadow_contract(proxy_state, impl_bytecode_analysis)
+            if violation:
+                violations.append(violation)
+
+        # DG-104: Admin mismatch
+        if expected_admin:
+            violation = check_admin_mismatch(proxy_state, expected_admin)
+            if violation:
+                violations.append(violation)
+
+        # DG-105: Non-standard proxy
+        violation = check_non_standard_proxy(proxy_state)
+        if violation:
+            violations.append(violation)
+
+        # Convert violations to findings
+        findings = [
+            _violation_to_finding(violation, f"finding-{i}")
+            for i, violation in enumerate(violations, start=1)
+        ]
+
+        # Build summary
+        summary = ReportSummary(
+            total_findings=len(findings),
+            critical_count=sum(1 for f in findings if f.severity.value == "critical"),
+            high_count=sum(1 for f in findings if f.severity.value == "high"),
+            medium_count=sum(1 for f in findings if f.severity.value == "medium"),
+            low_count=sum(1 for f in findings if f.severity.value == "low"),
+            info_count=sum(1 for f in findings if f.severity.value == "info"),
+            contracts_verified=1,
+            rules_executed=5,
+        )
+
+        # Determine exit code (non-zero if Critical or High findings)
+        exit_code = 0 if summary.passed else 1
+
+        # Redact RPC URL for security (keep only scheme and domain)
+        redacted_rpc_url: str | None = None
+        if rpc_url:
+            try:
+                from urllib.parse import urlparse
+
+                parsed = urlparse(rpc_url)
+                redacted_rpc_url = f"{parsed.scheme}://{parsed.netloc.split('@')[-1].split(':')[0]}"
+            except Exception:
+                redacted_rpc_url = "redacted"
+
+        return AnalysisReport(
+            report_id=str(uuid.uuid4()),
+            analysis_type=AnalysisType.DYNAMIC,
+            target_addresses=[proxy_address],
+            rpc_url=redacted_rpc_url,
+            findings=findings,
+            summary=summary,
+            exit_code=exit_code,
+        )

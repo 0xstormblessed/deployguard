@@ -2,19 +2,18 @@
 
 import asyncio
 import warnings
-from typing import Optional
 from urllib.parse import urlparse
 
 import aiohttp
 
 from deployguard.models.core import Address, Bytes32, StorageSlot
-from deployguard.models.dynamic import StorageSlotResult, StorageSlotQuery
+from deployguard.models.dynamic import StorageSlotQuery, StorageSlotResult
 
 
 class RPCError(Exception):
     """RPC request error."""
 
-    def __init__(self, code: int, message: str, data: Optional[dict] = None):
+    def __init__(self, code: int, message: str, data: dict | None = None):
         """Initialize RPC error.
 
         Args:
@@ -54,7 +53,7 @@ class RPCClient:
         self.timeout = timeout
         self.retries = retries
         self._validate_url()
-        self._session: Optional[aiohttp.ClientSession] = None
+        self._session: aiohttp.ClientSession | None = None
 
     def _validate_url(self) -> None:
         """Validate RPC URL is HTTPS."""
@@ -63,6 +62,7 @@ class RPCClient:
             warnings.warn(
                 f"RPC URL uses {parsed.scheme}, HTTPS recommended for security",
                 UserWarning,
+                stacklevel=2,
             )
 
     async def _get_session(self) -> aiohttp.ClientSession:
@@ -72,9 +72,7 @@ class RPCClient:
             self._session = aiohttp.ClientSession(timeout=timeout)
         return self._session
 
-    async def _request(
-        self, method: str, params: list, request_id: int = 1
-    ) -> dict:
+    async def _request(self, method: str, params: list, request_id: int = 1) -> dict:
         """Make JSON-RPC request with retry logic.
 
         Args:
@@ -116,7 +114,7 @@ class RPCClient:
             except (aiohttp.ClientError, asyncio.TimeoutError) as e:
                 last_error = e
                 if attempt < self.retries - 1:
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
                     continue
                 raise
 
@@ -126,7 +124,7 @@ class RPCClient:
         raise RPCError(-1, "Request failed after retries")
 
     async def get_storage_at(
-        self, address: Address, slot: StorageSlot, block: Optional[int] = None
+        self, address: Address, slot: StorageSlot, block: int | None = None
     ) -> StorageSlotResult:
         """Get storage slot value.
 
@@ -144,9 +142,7 @@ class RPCClient:
         value = await self._request("eth_getStorageAt", params)
         block_number = await self.get_block_number()
 
-        query = StorageSlotQuery(
-            proxy_address=address, slot=slot, block=block
-        )
+        query = StorageSlotQuery(proxy_address=address, slot=slot, block=block)
 
         # Decode address if slot contains address (last 20 bytes of 32-byte value)
         decoded_address = None
@@ -162,9 +158,7 @@ class RPCClient:
             block_number=block_number,
         )
 
-    async def get_code(
-        self, address: Address, block: Optional[int] = None
-    ) -> str:
+    async def get_code(self, address: Address, block: int | None = None) -> str:
         """Get contract bytecode.
 
         Args:
@@ -201,4 +195,3 @@ class RPCClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """Async context manager exit."""
         await self.close()
-

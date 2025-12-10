@@ -1,7 +1,6 @@
 """Bytecode analyzer for contract bytecode analysis."""
 
 import hashlib
-from typing import Optional
 
 from deployguard.constants import (
     OPCODE_CREATE,
@@ -54,9 +53,7 @@ class BytecodeAnalyzer:
 
         # Detect proxy patterns
         is_minimal_proxy = self._is_eip1167_proxy(bytecode_bytes)
-        is_proxy_pattern = (
-            has_delegatecall and not has_selfdestruct and not is_minimal_proxy
-        )
+        is_proxy_pattern = has_delegatecall and not has_selfdestruct and not is_minimal_proxy
 
         # Generate risk indicators
         risk_indicators = []
@@ -119,4 +116,3 @@ class BytecodeAnalyzer:
             return False
 
         return True
-
