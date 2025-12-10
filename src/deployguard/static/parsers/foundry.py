@@ -15,6 +15,7 @@ from solcx import compile_standard, get_installed_solc_versions, install_solc
 from deployguard.models.core import SourceLocation
 from deployguard.models.static import (
     BoundaryType,
+    FunctionCall,
     ProxyDeployment,
     ProxyType,
     ScriptAnalysis,
@@ -125,6 +126,9 @@ class FoundryScriptParser:
                 ast = output["sources"][file_path]["ast"]
                 self._analyze_ast(ast, analysis)
 
+            # Post-process to calculate transaction scope boundaries
+            self._calculate_scope_boundaries(analysis)
+
         except Exception as e:
             analysis.parse_errors.append(f"Parse error: {e}")
 
@@ -189,11 +193,27 @@ class FoundryScriptParser:
                 self._check_proxy_deployment(expr, analysis)
                 self._check_private_key_env(expr, analysis)
                 self._check_ownership_transfer(expr, analysis)
+                self._check_function_call(expr, analysis)
+                self._check_validation_pattern(expr, analysis)
 
             # Check variable declarations with proxy deployments
             elif node_type == "VariableDeclarationStatement":
                 init_value = stmt.get("initialValue", {})
+
+                # Track proxy deployments assigned to variables
+                num_deployments_before = len(analysis.proxy_deployments)
                 self._check_proxy_deployment(init_value, analysis)
+
+                # If a proxy was just deployed, capture the variable name
+                if len(analysis.proxy_deployments) > num_deployments_before:
+                    # Get variable name from declaration
+                    declarations = stmt.get("declarations", [])
+                    if declarations and declarations[0]:
+                        var_name = declarations[0].get("name", "")
+                        if var_name:
+                            # Update the last deployment with variable name
+                            analysis.proxy_deployments[-1].proxy_variable = var_name
+
                 self._check_private_key_env(init_value, analysis)
                 self._track_variable_assignment(stmt, analysis)
 
@@ -331,6 +351,96 @@ class FoundryScriptParser:
             member_name = callee.get("memberName", "")
             if member_name == "transferOwnership":
                 analysis.has_ownership_transfer = True
+
+    def _check_function_call(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
+        """Detect function calls like proxy.initialize().
+
+        Args:
+            expr: Expression AST node
+            analysis: Analysis to update
+        """
+        if expr.get("nodeType") != "FunctionCall":
+            return
+
+        callee = expr.get("expression", {})
+
+        # Look for member access pattern: variable.functionName()
+        if callee.get("nodeType") == "MemberAccess":
+            member_name = callee.get("memberName", "")
+            base_expr = callee.get("expression", {})
+
+            # Get the receiver variable name
+            if base_expr.get("nodeType") == "Identifier":
+                receiver = base_expr.get("name", "")
+                if receiver and member_name:
+                    location = self._extract_location(expr)
+                    function_call = FunctionCall(
+                        receiver=receiver,
+                        function_name=member_name,
+                        location=location,
+                    )
+                    analysis.function_calls.append(function_call)
+
+    def _check_validation_pattern(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
+        """Detect validation patterns like require(impl.code.length > 0).
+
+        Args:
+            expr: Expression AST node
+            analysis: Analysis to update
+        """
+        if expr.get("nodeType") != "FunctionCall":
+            return
+
+        callee = expr.get("expression", {})
+
+        # Look for require() calls
+        if callee.get("nodeType") == "Identifier" and callee.get("name") == "require":
+            # Extract source code to analyze
+            arg_source = ""
+            args = expr.get("arguments", [])
+            if args:
+                arg_source = self._extract_argument_source(args[0])
+
+            # Check for validation patterns
+            validated_vars = self._extract_validated_variables(arg_source)
+            for var_name in validated_vars:
+                # Mark variable as validated
+                if var_name in analysis.implementation_variables:
+                    analysis.implementation_variables[var_name].is_validated = True
+
+    def _extract_validated_variables(self, condition: str) -> set[str]:
+        """Extract variable names from validation conditions.
+
+        Looks for patterns like:
+        - impl.code.length > 0
+        - impl != address(0)
+        - isContract(impl)
+
+        Args:
+            condition: Source code of require() condition
+
+        Returns:
+            Set of variable names being validated
+        """
+        validated_vars: set[str] = set()
+
+        # Pattern 1: variable.code.length > 0
+        matches = re.findall(r"(\w+)\.code\.length\s*>\s*0", condition)
+        validated_vars.update(matches)
+
+        # Pattern 2: variable != address(0)
+        matches = re.findall(r"(\w+)\s*!=\s*address\(0\)", condition)
+        validated_vars.update(matches)
+
+        # Pattern 3: isContract(variable)
+        matches = re.findall(r"isContract\((\w+)\)", condition)
+        validated_vars.update(matches)
+
+        # Pattern 4: variable != 0 or variable != address(0x0)
+        matches = re.findall(r"(\w+)\s*!=\s*(?:0|address\(0x0+\))", condition)
+        validated_vars.update(matches)
+
+        return validated_vars
 
     def _parse_proxy_deployment(
         self, expr: dict[str, Any], contract_name: str, proxy_type: ProxyType
@@ -496,7 +606,7 @@ class FoundryScriptParser:
                     ),
                     assignment_location=self._extract_location(stmt),
                     is_hardcoded=self._is_hardcoded_address(init_value),
-                    is_validated=False,  # TODO: Check for validation patterns
+                    is_validated=False,  # Will be updated by validation pattern detection
                 )
                 analysis.implementation_variables[var_name] = var_info
 
@@ -507,3 +617,27 @@ class FoundryScriptParser:
             # Check for address literal (0x + 40 hex chars)
             return bool(re.match(r"^0x[a-fA-F0-9]{40}$", value))
         return False
+
+    def _calculate_scope_boundaries(self, analysis: ScriptAnalysis) -> None:
+        """Calculate scope_end for transaction boundaries by pairing start/stop.
+
+        This pairs up vm.startBroadcast() with vm.stopBroadcast() to determine
+        the line range for each broadcast scope.
+
+        Args:
+            analysis: Analysis to update with scope_end values
+        """
+        boundaries = analysis.tx_boundaries
+
+        # Stack to track nested startBroadcast calls
+        start_stack: list[int] = []
+
+        for i, boundary in enumerate(boundaries):
+            if boundary.boundary_type == BoundaryType.VM_START_BROADCAST:
+                # Push start boundary index onto stack
+                start_stack.append(i)
+            elif boundary.boundary_type == BoundaryType.VM_STOP_BROADCAST:
+                # Pop matching start and set its scope_end
+                if start_stack:
+                    start_idx = start_stack.pop()
+                    boundaries[start_idx].scope_end = boundary.location.line_number
