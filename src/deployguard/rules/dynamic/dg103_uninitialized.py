@@ -2,6 +2,7 @@
 
 from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
+from deployguard.rules.base import DynamicRule
 
 RULE_DG_103 = Rule(
     rule_id="DG-103",
@@ -21,8 +22,62 @@ RULE_DG_103 = Rule(
 )
 
 
+class UninitializedProxyRule(DynamicRule):
+    """DG-103: Check for uninitialized proxy.
+
+    Detects proxies where the implementation slot is empty (zero address),
+    indicating the proxy was never initialized.
+    """
+
+    async def check(
+        self,
+        proxy_state: ProxyState,
+        expected_impl: str,
+        expected_admin: str | None = None,
+    ) -> list[RuleViolation]:
+        """Check if proxy is uninitialized.
+
+        Args:
+            proxy_state: Current proxy state from chain
+            expected_impl: Expected implementation address (unused)
+            expected_admin: Expected admin address (unused)
+
+        Returns:
+            List containing violation if proxy is uninitialized, empty otherwise
+        """
+        violations = []
+        impl_value = proxy_state.implementation_slot.value
+        zero_slot = "0x" + "0" * 64
+
+        if impl_value == zero_slot:
+            violations.append(
+                RuleViolation(
+                    rule=self.rule,
+                    severity=self.rule.severity,
+                    message="Proxy implementation slot is empty (uninitialized)",
+                    recommendation=self.rule.remediation,
+                    storage_data=proxy_state.implementation_slot,
+                    context={
+                        "proxy_address": str(proxy_state.proxy_address),
+                        "slot_value": str(impl_value),
+                        "block_number": proxy_state.implementation_slot.block_number,
+                    },
+                )
+            )
+
+        return violations
+
+
+# Instantiate rule for registration
+rule_dg103 = UninitializedProxyRule(RULE_DG_103)
+
+
+# Backward compatibility function (deprecated)
 def check_uninitialized_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     """Check if proxy is uninitialized.
+
+    .. deprecated::
+        Use UninitializedProxyRule class instead.
 
     Args:
         proxy_state: Current proxy state from chain
@@ -30,20 +85,7 @@ def check_uninitialized_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     Returns:
         RuleViolation if proxy is uninitialized, None otherwise
     """
-    impl_value = proxy_state.implementation_slot.value
-    zero_slot = "0x" + "0" * 64
+    import asyncio
 
-    if impl_value == zero_slot:
-        return RuleViolation(
-            rule=RULE_DG_103,
-            severity=Severity.HIGH,
-            message="Proxy implementation slot is empty (uninitialized)",
-            recommendation=RULE_DG_103.remediation,
-            storage_data=proxy_state.implementation_slot,
-            context={
-                "proxy_address": str(proxy_state.proxy_address),
-                "slot_value": str(impl_value),
-                "block_number": proxy_state.implementation_slot.block_number,
-            },
-        )
-    return None
+    violations = asyncio.run(rule_dg103.check(proxy_state, "", None))
+    return violations[0] if violations else None

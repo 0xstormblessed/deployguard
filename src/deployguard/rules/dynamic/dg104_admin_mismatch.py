@@ -3,6 +3,7 @@
 from deployguard.models.core import Address
 from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
+from deployguard.rules.base import DynamicRule
 
 RULE_DG_104 = Rule(
     rule_id="DG-104",
@@ -23,10 +24,68 @@ RULE_DG_104 = Rule(
 )
 
 
+class AdminMismatchRule(DynamicRule):
+    """DG-104: Check for admin slot mismatch.
+
+    Verifies that the admin address stored in the EIP-1967 admin slot
+    matches the expected admin address.
+    """
+
+    async def check(
+        self,
+        proxy_state: ProxyState,
+        expected_impl: str,
+        expected_admin: str | None = None,
+    ) -> list[RuleViolation]:
+        """Check if admin address matches expected.
+
+        Args:
+            proxy_state: Current proxy state from chain
+            expected_impl: Expected implementation address (unused)
+            expected_admin: Expected admin address (None to skip check)
+
+        Returns:
+            List containing violation if mismatch detected, empty otherwise
+        """
+        violations = []
+
+        if not expected_admin or not proxy_state.admin_slot:
+            return violations
+
+        actual_admin = proxy_state.admin_slot.decoded_address
+
+        if actual_admin and actual_admin.lower() != expected_admin.lower():
+            violations.append(
+                RuleViolation(
+                    rule=self.rule,
+                    severity=self.rule.severity,
+                    message=f"Admin mismatch: expected {expected_admin}, found {actual_admin}",
+                    recommendation=self.rule.remediation,
+                    storage_data=proxy_state.admin_slot,
+                    context={
+                        "expected": expected_admin,
+                        "actual": str(actual_admin),
+                        "proxy_address": str(proxy_state.proxy_address),
+                        "block_number": proxy_state.admin_slot.block_number,
+                    },
+                )
+            )
+
+        return violations
+
+
+# Instantiate rule for registration
+rule_dg104 = AdminMismatchRule(RULE_DG_104)
+
+
+# Backward compatibility function (deprecated)
 def check_admin_mismatch(
     proxy_state: ProxyState, expected_admin: Address | None
 ) -> RuleViolation | None:
     """Check if admin address matches expected.
+
+    .. deprecated::
+        Use AdminMismatchRule class instead.
 
     Args:
         proxy_state: Current proxy state from chain
@@ -35,23 +94,10 @@ def check_admin_mismatch(
     Returns:
         RuleViolation if mismatch detected, None otherwise
     """
-    if not expected_admin or not proxy_state.admin_slot:
+    import asyncio
+
+    if not expected_admin:
         return None
 
-    actual_admin = proxy_state.admin_slot.decoded_address
-
-    if actual_admin and actual_admin.lower() != expected_admin.lower():
-        return RuleViolation(
-            rule=RULE_DG_104,
-            severity=Severity.MEDIUM,
-            message=(f"Admin mismatch: expected {expected_admin}, found {actual_admin}"),
-            recommendation=RULE_DG_104.remediation,
-            storage_data=proxy_state.admin_slot,
-            context={
-                "expected": str(expected_admin),
-                "actual": str(actual_admin),
-                "proxy_address": str(proxy_state.proxy_address),
-                "block_number": proxy_state.admin_slot.block_number,
-            },
-        )
-    return None
+    violations = asyncio.run(rule_dg104.check(proxy_state, "", str(expected_admin)))
+    return violations[0] if violations else None

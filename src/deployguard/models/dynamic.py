@@ -115,6 +115,7 @@ class ProxyState:
         beacon_slot: EIP-1967 beacon slot result (if available)
         proxy_bytecode: Proxy contract bytecode
         implementation_bytecode: Implementation contract bytecode (if available)
+        implementation_bytecode_analysis: Analysis of implementation bytecode (if available)
         proxy_standard: Detected proxy standard
         is_initialized: Whether proxy appears initialized
     """
@@ -125,6 +126,7 @@ class ProxyState:
     beacon_slot: Optional[StorageSlotResult] = None
     proxy_bytecode: Bytecode = Bytecode("")
     implementation_bytecode: Optional[Bytecode] = None
+    implementation_bytecode_analysis: Optional[BytecodeAnalysis] = None
     proxy_standard: ProxyStandard = ProxyStandard.UNKNOWN
     is_initialized: bool = False
 

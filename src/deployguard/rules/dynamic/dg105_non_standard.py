@@ -2,6 +2,7 @@
 
 from deployguard.models.dynamic import ProxyStandard, ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
+from deployguard.rules.base import DynamicRule
 
 RULE_DG_105 = Rule(
     rule_id="DG-105",
@@ -24,8 +25,63 @@ RULE_DG_105 = Rule(
 )
 
 
+class NonStandardProxyRule(DynamicRule):
+    """DG-105: Check for non-standard proxy patterns.
+
+    Detects proxies that don't use standard EIP-1967 storage slots,
+    which may indicate custom implementations or different proxy standards.
+    """
+
+    async def check(
+        self,
+        proxy_state: ProxyState,
+        expected_impl: str,
+        expected_admin: str | None = None,
+    ) -> list[RuleViolation]:
+        """Check if proxy uses non-standard storage slots.
+
+        Args:
+            proxy_state: Current proxy state from chain
+            expected_impl: Expected implementation address (unused)
+            expected_admin: Expected admin address (unused)
+
+        Returns:
+            List containing violation if non-standard proxy detected, empty otherwise
+        """
+        violations = []
+
+        if proxy_state.proxy_standard == ProxyStandard.UNKNOWN:
+            zero_slot = "0x" + "0" * 64
+            impl_slot_empty = proxy_state.implementation_slot.value == zero_slot
+
+            violations.append(
+                RuleViolation(
+                    rule=self.rule,
+                    severity=self.rule.severity,
+                    message="Proxy does not use standard EIP-1967 storage slots",
+                    recommendation=self.rule.remediation,
+                    context={
+                        "proxy_address": str(proxy_state.proxy_address),
+                        "proxy_standard": proxy_state.proxy_standard.value,
+                        "implementation_slot_empty": impl_slot_empty,
+                        "is_initialized": proxy_state.is_initialized,
+                    },
+                )
+            )
+
+        return violations
+
+
+# Instantiate rule for registration
+rule_dg105 = NonStandardProxyRule(RULE_DG_105)
+
+
+# Backward compatibility function (deprecated)
 def check_non_standard_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     """Check if proxy uses non-standard storage slots.
+
+    .. deprecated::
+        Use NonStandardProxyRule class instead.
 
     Args:
         proxy_state: Current proxy state from chain
@@ -33,20 +89,7 @@ def check_non_standard_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     Returns:
         RuleViolation if non-standard proxy detected, None otherwise
     """
-    if proxy_state.proxy_standard == ProxyStandard.UNKNOWN:
-        zero_slot = "0x" + "0" * 64
-        impl_slot_empty = proxy_state.implementation_slot.value == zero_slot
+    import asyncio
 
-        return RuleViolation(
-            rule=RULE_DG_105,
-            severity=Severity.INFO,
-            message="Proxy does not use standard EIP-1967 storage slots",
-            recommendation=RULE_DG_105.remediation,
-            context={
-                "proxy_address": str(proxy_state.proxy_address),
-                "proxy_standard": proxy_state.proxy_standard.value,
-                "implementation_slot_empty": impl_slot_empty,
-                "is_initialized": proxy_state.is_initialized,
-            },
-        )
-    return None
+    violations = asyncio.run(rule_dg105.check(proxy_state, "", None))
+    return violations[0] if violations else None
