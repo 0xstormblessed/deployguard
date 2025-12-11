@@ -6,12 +6,18 @@ Foundry deployment scripts.
 
 from __future__ import annotations
 
+import time
+import traceback
+import uuid
+from collections.abc import Callable
 from pathlib import Path
 
 from deployguard.config import DeployGuardConfig
+from deployguard.models.report import BatchAnalysisReport, FileAnalysisResult, Finding
 from deployguard.models.rules import RuleViolation
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.executors import StaticRuleExecutor
+from deployguard.scanner import scan_deployment_scripts
 from deployguard.static.parsers.foundry import FoundryScriptParser
 
 # Note: Rule definitions are now in rules/proxy/dg*.py modules
@@ -77,6 +83,164 @@ class StaticAnalyzer:
         """
         executor = StaticRuleExecutor(self.config)
         return executor.execute(analysis)
+
+    def analyze_folder(
+        self,
+        path: Path | str,
+        include_patterns: list[str] | None = None,
+        exclude_patterns: list[str] | None = None,
+        respect_gitignore: bool = True,
+        fail_fast: bool = False,
+        progress_callback: Callable[[Path, int, int], None] | None = None,
+    ) -> BatchAnalysisReport:
+        """Analyze all deployment scripts in a folder.
+
+        This method scans for deployment scripts recursively and analyzes each one,
+        isolating errors so one failure doesn't stop the batch (unless fail_fast is True).
+
+        Args:
+            path: Starting path (file or directory)
+            include_patterns: Glob patterns to include
+            exclude_patterns: Glob patterns to exclude
+            respect_gitignore: Whether to respect .gitignore files
+            fail_fast: If True, stop analysis on first file failure
+            progress_callback: Optional callback(file, current, total) for progress
+
+        Returns:
+            BatchAnalysisReport with aggregated results
+
+        Example:
+            >>> analyzer = StaticAnalyzer()
+            >>> report = analyzer.analyze_folder("./script")
+            >>> print(f"Analyzed {len(report.files_analyzed)} files")
+            >>> print(f"Status: {report.status}")
+        """
+        start_time = time.time()
+
+        # Convert to Path
+        if isinstance(path, str):
+            path = Path(path)
+
+        # Scan for deployment scripts
+        try:
+            scripts = scan_deployment_scripts(
+                path=path,
+                include_patterns=include_patterns,
+                exclude_patterns=exclude_patterns,
+                respect_gitignore=respect_gitignore,
+            )
+        except ValueError as e:
+            # No Foundry project found
+            raise ValueError(f"Failed to scan folder: {e}") from e
+
+        # Get project root for report
+        from deployguard.project import detect_foundry_project
+
+        project = detect_foundry_project(path)
+        project_root = project.root if project else path
+
+        # Initialize report
+        report = BatchAnalysisReport(
+            report_id=str(uuid.uuid4()),
+            project_root=project_root,
+            files_analyzed=scripts,
+            results=[],
+        )
+
+        # Analyze each script with error isolation
+        total = len(scripts)
+        for idx, script_path in enumerate(scripts, start=1):
+            # Progress callback
+            if progress_callback:
+                progress_callback(script_path, idx, total)
+
+            # Analyze this file
+            result = self._analyze_single_file(script_path)
+            report.results.append(result)
+
+            # Stop on first failure if fail_fast is enabled
+            if fail_fast and not result.success:
+                break
+
+        # Calculate total time
+        end_time = time.time()
+        report.total_analysis_time_ms = (end_time - start_time) * 1000
+
+        # Update summary
+        report.update_summary()
+
+        return report
+
+    def _analyze_single_file(self, file_path: Path) -> FileAnalysisResult:
+        """Analyze a single file with error isolation.
+
+        Args:
+            file_path: Path to the script file
+
+        Returns:
+            FileAnalysisResult for this file
+        """
+        start_time = time.time()
+
+        try:
+            # Parse the file
+            analysis = self.analyze_file(file_path)
+
+            # Run rules
+            violations = self.run_rules(analysis)
+
+            # Convert violations to findings
+            findings = self._violations_to_findings(violations, file_path)
+
+            # Success
+            end_time = time.time()
+            return FileAnalysisResult(
+                file_path=file_path,
+                success=True,
+                findings=findings,
+                error=None,
+                analysis_time_ms=(end_time - start_time) * 1000,
+            )
+
+        except Exception as e:
+            # Isolate error - continue with other files
+            end_time = time.time()
+            return FileAnalysisResult(
+                file_path=file_path,
+                success=False,
+                findings=[],
+                error=str(e),
+                error_type=type(e).__name__,
+                error_traceback=traceback.format_exc(),
+                analysis_time_ms=(end_time - start_time) * 1000,
+            )
+
+    def _violations_to_findings(
+        self, violations: list[RuleViolation], file_path: Path
+    ) -> list[Finding]:
+        """Convert rule violations to findings.
+
+        Args:
+            violations: List of rule violations
+            file_path: Path to the file being analyzed
+
+        Returns:
+            List of Finding objects
+        """
+        findings = []
+        for violation in violations:
+            finding = Finding(
+                id=str(uuid.uuid4()),
+                rule_id=violation.rule_id,
+                title=violation.message,
+                description=violation.message,
+                severity=violation.severity,
+                location=violation.location,
+                recommendation=violation.recommendation,
+            )
+            findings.append(finding)
+
+        return findings
 
 
 def analyze_script(file_path: str, config: DeployGuardConfig | None = None) -> ScriptAnalysis:
