@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from deployguard.models.testing import FoundryProject, TestAnalysis, TestCoverage
+from deployguard.models.testing import CoverageAnalysis, FoundryProject, ScriptTestCoverage
 from deployguard.testing import (
     analyze_test_coverage,
     analyze_test_coverage_from_path,
@@ -172,7 +172,7 @@ def test_check_script_coverage(mock_foundry_project: FoundryProject):
     deploy_script = mock_foundry_project.script_dir / "Deploy.s.sol"
     coverage = check_script_coverage(deploy_script, mock_foundry_project)
 
-    assert isinstance(coverage, TestCoverage)
+    assert isinstance(coverage, ScriptTestCoverage)
     assert coverage.deploy_script == deploy_script
     assert coverage.has_any_test is True
     assert len(coverage.test_files) > 0
@@ -183,7 +183,7 @@ def test_analyze_test_coverage(mock_foundry_project: FoundryProject):
     """Test analyzing test coverage for entire project."""
     analysis = analyze_test_coverage(mock_foundry_project)
 
-    assert isinstance(analysis, TestAnalysis)
+    assert isinstance(analysis, CoverageAnalysis)
     assert analysis.project_root == mock_foundry_project.root
     assert len(analysis.deploy_scripts) == 1
     assert analysis.scripts_with_tests == 1
@@ -206,7 +206,7 @@ def test_analyze_test_coverage_from_path(tmp_path: Path):
     analysis = analyze_test_coverage_from_path(tmp_path)
 
     assert analysis is not None
-    assert isinstance(analysis, TestAnalysis)
+    assert isinstance(analysis, CoverageAnalysis)
 
 
 def test_coverage_without_tests(tmp_path: Path):

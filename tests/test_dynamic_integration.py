@@ -1,6 +1,6 @@
 """Integration tests for end-to-end dynamic analysis."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -51,7 +51,7 @@ async def test_full_proxy_verification_no_issues() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             impl_addr,
@@ -99,7 +99,7 @@ async def test_full_proxy_verification_implementation_mismatch() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             expected_impl,
@@ -147,7 +147,7 @@ async def test_full_proxy_verification_uninitialized() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             expected_impl,
@@ -195,7 +195,7 @@ async def test_full_proxy_verification_shadow_contract() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             impl_addr,
@@ -255,7 +255,7 @@ async def test_full_proxy_verification_admin_mismatch() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             impl_addr,
@@ -317,7 +317,7 @@ async def test_full_proxy_verification_multiple_issues() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(
             proxy_addr,
             expected_impl,
@@ -364,7 +364,7 @@ async def test_rpc_url_redaction() -> None:
 
     sensitive_url = "https://user:password@eth-mainnet.g.alchemy.com:443/v2/secret-key"
 
-    with pytest.mock.patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
+    with patch("deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc):
         report = await verify_proxy(proxy_addr, impl_addr, sensitive_url)
 
     # RPC URL should be redacted (no credentials or API keys)

@@ -41,9 +41,9 @@ from deployguard.models.static import (
     VariableInfo,
 )
 from deployguard.models.testing import (
+    CoverageAnalysis,
     FoundryProject,
-    TestAnalysis,
-    TestCoverage,
+    ScriptTestCoverage,
 )
 
 __all__ = [
@@ -84,7 +84,7 @@ __all__ = [
     "ReportSummary",
     # Testing models
     "FoundryProject",
-    "TestCoverage",
-    "TestAnalysis",
+    "ScriptTestCoverage",
+    "CoverageAnalysis",
 ]
 

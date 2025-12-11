@@ -6,7 +6,7 @@ of Foundry deployment scripts.
 
 from pathlib import Path
 
-from deployguard.models.testing import FoundryProject, TestAnalysis, TestCoverage
+from deployguard.models.testing import CoverageAnalysis, FoundryProject, ScriptTestCoverage
 from deployguard.testing.matcher import (
     check_test_calls_run,
     find_all_importing_tests,
@@ -17,7 +17,7 @@ from deployguard.testing.matcher import (
 
 def check_script_coverage(
     deploy_script: Path, project: FoundryProject
-) -> TestCoverage:
+) -> ScriptTestCoverage:
     """Check test coverage for a single deployment script.
 
     This function analyzes a deployment script to determine:
@@ -31,7 +31,7 @@ def check_script_coverage(
         project: FoundryProject containing the script
 
     Returns:
-        TestCoverage object with coverage information
+        ScriptTestCoverage object with coverage information
 
     Example:
         >>> project = FoundryProject.detect(Path.cwd())
@@ -63,7 +63,7 @@ def check_script_coverage(
         except (OSError, UnicodeDecodeError):
             continue
 
-    return TestCoverage(
+    return ScriptTestCoverage(
         deploy_script=deploy_script,
         test_files=all_test_files,
         has_any_test=len(all_test_files) > 0,
@@ -74,7 +74,7 @@ def check_script_coverage(
     )
 
 
-def analyze_test_coverage(project: FoundryProject) -> TestAnalysis:
+def analyze_test_coverage(project: FoundryProject) -> CoverageAnalysis:
     """Analyze test coverage for all deployment scripts in a project.
 
     This function performs a complete test coverage analysis for all
@@ -84,7 +84,7 @@ def analyze_test_coverage(project: FoundryProject) -> TestAnalysis:
         project: FoundryProject to analyze
 
     Returns:
-        TestAnalysis with complete coverage information
+        CoverageAnalysis with complete coverage information
 
     Example:
         >>> project = FoundryProject.detect(Path.cwd())
@@ -92,7 +92,7 @@ def analyze_test_coverage(project: FoundryProject) -> TestAnalysis:
         >>> print(f"Scripts with tests: {analysis.scripts_with_tests}")
         >>> print(f"Scripts without tests: {analysis.scripts_without_tests}")
     """
-    coverage_map: dict[Path, TestCoverage] = {}
+    coverage_map: dict[Path, ScriptTestCoverage] = {}
 
     # Analyze each deployment script
     for deploy_script in project.deploy_scripts:
@@ -110,7 +110,7 @@ def analyze_test_coverage(project: FoundryProject) -> TestAnalysis:
         1 for cov in coverage_map.values() if cov.has_fork_test
     )
 
-    return TestAnalysis(
+    return CoverageAnalysis(
         project_root=project.root,
         deploy_scripts=project.deploy_scripts,
         test_files=project.test_files,
@@ -121,7 +121,7 @@ def analyze_test_coverage(project: FoundryProject) -> TestAnalysis:
     )
 
 
-def analyze_test_coverage_from_path(start_path: Path | str) -> TestAnalysis | None:
+def analyze_test_coverage_from_path(start_path: Path | str) -> CoverageAnalysis | None:
     """Analyze test coverage starting from a given path.
 
     This is a convenience function that detects the Foundry project and
@@ -131,7 +131,7 @@ def analyze_test_coverage_from_path(start_path: Path | str) -> TestAnalysis | No
         start_path: Path to start from (file or directory)
 
     Returns:
-        TestAnalysis if a Foundry project is found, None otherwise
+        CoverageAnalysis if a Foundry project is found, None otherwise
 
     Example:
         >>> analysis = analyze_test_coverage_from_path(".")

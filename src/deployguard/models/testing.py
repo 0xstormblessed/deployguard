@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 @dataclass
-class TestCoverage:
+class ScriptTestCoverage:
     """Test coverage information for a deployment script."""
 
     deploy_script: Path
@@ -26,7 +26,7 @@ class TestCoverage:
 
 
 @dataclass
-class TestAnalysis:
+class CoverageAnalysis:
     """Complete test analysis for a Foundry project."""
 
     project_root: Path
@@ -38,7 +38,7 @@ class TestAnalysis:
     test_files: list[Path]
 
     # Coverage mapping
-    coverage: dict[Path, TestCoverage]  # deploy_script → coverage
+    coverage: dict[Path, ScriptTestCoverage]  # deploy_script → coverage
 
     # Summary
     scripts_with_tests: int
