@@ -1,6 +1,6 @@
 """Tests for dynamic analyzer."""
 
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -192,7 +192,7 @@ async def test_quick_check_match() -> None:
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
     # Patch RPCClient constructor
-    with pytest.mock.patch(
+    with patch(
         "deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc
     ):
         result = await quick_check(
@@ -224,7 +224,7 @@ async def test_quick_check_mismatch() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch(
+    with patch(
         "deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc
     ):
         result = await quick_check(
@@ -257,7 +257,7 @@ async def test_get_implementation_address() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch(
+    with patch(
         "deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc
     ):
         result = await get_implementation_address(
@@ -293,7 +293,7 @@ async def test_verify_proxy_full_report() -> None:
     mock_rpc.__aenter__ = AsyncMock(return_value=mock_rpc)
     mock_rpc.__aexit__ = AsyncMock(return_value=None)
 
-    with pytest.mock.patch(
+    with patch(
         "deployguard.dynamic.analyzer.RPCClient", return_value=mock_rpc
     ):
         report = await verify_proxy(

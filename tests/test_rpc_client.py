@@ -10,6 +10,19 @@ from deployguard.dynamic.rpc_client import RPCClient, RPCError
 from deployguard.models.core import Address, Bytes32, StorageSlot
 
 
+class MockPostContextManager:
+    """Helper class to mock aiohttp's async context manager for post()."""
+
+    def __init__(self, response):
+        self.response = response
+
+    async def __aenter__(self):
+        return self.response
+
+    async def __aexit__(self, *args):
+        pass
+
+
 @pytest.mark.asyncio
 async def test_rpc_client_initialization() -> None:
     """Test RPC client initialization."""
@@ -59,10 +72,9 @@ async def test_get_storage_at_success() -> None:
         }
     )
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -93,10 +105,9 @@ async def test_get_storage_at_zero_value() -> None:
         return_value={"jsonrpc": "2.0", "id": 1, "result": "0x" + "0" * 64}
     )
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -123,10 +134,9 @@ async def test_get_code_success() -> None:
         return_value={"jsonrpc": "2.0", "id": 1, "result": bytecode}
     )
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -148,10 +158,9 @@ async def test_get_code_empty() -> None:
     mock_response = AsyncMock()
     mock_response.json = AsyncMock(return_value={"jsonrpc": "2.0", "id": 1, "result": "0x"})
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -175,10 +184,9 @@ async def test_get_block_number_success() -> None:
         return_value={"jsonrpc": "2.0", "id": 1, "result": "0x12345"}
     )
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -205,10 +213,9 @@ async def test_rpc_error_handling() -> None:
         }
     )
 
-    mock_session = AsyncMock()
-    mock_session.post = AsyncMock(return_value=mock_response)
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session = MagicMock()
+    mock_session.post = MagicMock(return_value=MockPostContextManager(mock_response))
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -235,17 +242,16 @@ async def test_rpc_retry_on_timeout() -> None:
 
     call_count = 0
 
-    async def mock_post(*args, **kwargs):
+    def mock_post(*args, **kwargs):
         nonlocal call_count
         call_count += 1
         if call_count < 2:
             raise asyncio.TimeoutError()
-        return mock_response_success
+        return MockPostContextManager(mock_response_success)
 
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
     mock_session.post = mock_post
-    mock_session.__aenter__ = AsyncMock(return_value=mock_response_success)
-    mock_session.__aexit__ = AsyncMock(return_value=None)
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -264,11 +270,12 @@ async def test_rpc_retry_exhausted() -> None:
     client = RPCClient("https://eth-mainnet.g.alchemy.com/v2/test", retries=2)
 
     # Mock persistent timeout
-    async def mock_post(*args, **kwargs):
+    def mock_post(*args, **kwargs):
         raise asyncio.TimeoutError()
 
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
     mock_session.post = mock_post
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session
@@ -284,14 +291,15 @@ async def test_get_storage_at_with_block_number() -> None:
     """Test storage slot query at specific block."""
     client = RPCClient("https://eth-mainnet.g.alchemy.com/v2/test")
 
-    # Track request params
+    # Track request params (only capture getStorageAt params)
     request_params = None
 
-    async def mock_post(url, json=None):
+    def mock_post(url, json=None):
         nonlocal request_params
-        request_params = json.get("params") if json else None
         mock_response = AsyncMock()
         if json and json.get("method") == "eth_getStorageAt":
+            # Capture params only for getStorageAt
+            request_params = json.get("params") if json else None
             mock_response.json = AsyncMock(
                 return_value={
                     "jsonrpc": "2.0",
@@ -303,12 +311,11 @@ async def test_get_storage_at_with_block_number() -> None:
             mock_response.json = AsyncMock(
                 return_value={"jsonrpc": "2.0", "id": 1, "result": "0x1000"}
             )
-        return mock_response
+        return MockPostContextManager(mock_response)
 
-    mock_session = AsyncMock()
+    mock_session = MagicMock()
     mock_session.post = mock_post
-    mock_session.__aenter__ = AsyncMock()
-    mock_session.__aexit__ = AsyncMock()
+    mock_session.close = AsyncMock()
     mock_session.closed = False
 
     client._session = mock_session

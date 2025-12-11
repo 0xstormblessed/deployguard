@@ -40,6 +40,11 @@ from deployguard.models.static import (
     TransactionBoundary,
     VariableInfo,
 )
+from deployguard.models.testing import (
+    CoverageAnalysis,
+    FoundryProject,
+    ScriptTestCoverage,
+)
 
 __all__ = [
     # Core types
@@ -77,5 +82,9 @@ __all__ = [
     "AnalysisType",
     "AnalysisReport",
     "ReportSummary",
+    # Testing models
+    "FoundryProject",
+    "ScriptTestCoverage",
+    "CoverageAnalysis",
 ]
 

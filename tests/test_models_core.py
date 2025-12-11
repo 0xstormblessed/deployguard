@@ -35,8 +35,10 @@ class TestAddressValidation:
     def test_normalize_address(self) -> None:
         """Test address normalization."""
         addr = normalize_address("0x1234567890123456789012345678901234567890")
-        assert isinstance(addr, Address)
+        # Address is a NewType(str), so check it's a string at runtime
+        assert isinstance(addr, str)
         assert addr.startswith("0x")
+        assert len(addr) == 42  # 0x + 40 hex chars
 
     def test_normalize_invalid_address(self) -> None:
         """Test normalization of invalid address raises error."""
