@@ -17,15 +17,10 @@ from deployguard.models.dynamic import (
     ProxyVerification,
     StorageSlotResult,
 )
+from deployguard.config import DeployGuardConfig
 from deployguard.models.report import AnalysisReport, AnalysisType, Finding, ReportSummary
 from deployguard.models.rules import RuleViolation
-from deployguard.rules.dynamic import (
-    check_admin_mismatch,
-    check_implementation_mismatch,
-    check_non_standard_proxy,
-    check_shadow_contract,
-    check_uninitialized_proxy,
-)
+from deployguard.rules.executors import DynamicRuleExecutor
 
 
 class DynamicAnalyzer:
@@ -81,8 +76,15 @@ class DynamicAnalyzer:
 
         # Get implementation bytecode if available
         impl_bytecode: str | None = None
+        impl_bytecode_analysis: BytecodeAnalysis | None = None
         if impl_result.decoded_address:
             impl_bytecode = await self.rpc_client.get_code(impl_result.decoded_address)
+            # Analyze implementation bytecode for shadow contract detection
+            if impl_bytecode:
+                impl_bytecode_analysis = await self.analyze_bytecode(
+                    impl_result.decoded_address,
+                    impl_bytecode,
+                )
 
         # Detect proxy standard
         proxy_standard = self._detect_proxy_standard(impl_result, admin_result, beacon_result)
@@ -97,6 +99,7 @@ class DynamicAnalyzer:
             beacon_slot=beacon_result,
             proxy_bytecode=proxy_bytecode,
             implementation_bytecode=impl_bytecode,
+            implementation_bytecode_analysis=impl_bytecode_analysis,
             proxy_standard=proxy_standard,
             is_initialized=is_initialized,
         )
@@ -253,6 +256,7 @@ async def verify_proxy(
     expected_implementation: Address,
     rpc_url: str,
     expected_admin: Address | None = None,
+    config: DeployGuardConfig | None = None,
 ) -> AnalysisReport:
     """Verify a proxy contract's on-chain state and run all dynamic rules.
 
@@ -261,6 +265,7 @@ async def verify_proxy(
         expected_implementation: Expected implementation address
         rpc_url: RPC endpoint URL
         expected_admin: Optional expected admin address
+        config: Optional configuration for rule filtering
 
     Returns:
         AnalysisReport with findings from all dynamic rules
@@ -277,42 +282,16 @@ async def verify_proxy(
             expected_admin=expected_admin,
         )
 
-        # Get proxy state
+        # Get proxy state (includes implementation_bytecode_analysis)
         proxy_state = await analyzer.verify_proxy(verification)
 
-        # Run all dynamic rules
-        violations: list[RuleViolation] = []
-
-        # DG-101: Implementation mismatch
-        violation = check_implementation_mismatch(proxy_state, expected_implementation)
-        if violation:
-            violations.append(violation)
-
-        # DG-103: Uninitialized proxy (check before shadow contract)
-        violation = check_uninitialized_proxy(proxy_state)
-        if violation:
-            violations.append(violation)
-
-        # DG-102: Shadow contract (only if implementation exists)
-        if proxy_state.implementation_bytecode:
-            impl_bytecode_analysis = await analyzer.analyze_bytecode(
-                proxy_state.implementation_slot.decoded_address or proxy_address,
-                proxy_state.implementation_bytecode,
-            )
-            violation = check_shadow_contract(proxy_state, impl_bytecode_analysis)
-            if violation:
-                violations.append(violation)
-
-        # DG-104: Admin mismatch
-        if expected_admin:
-            violation = check_admin_mismatch(proxy_state, expected_admin)
-            if violation:
-                violations.append(violation)
-
-        # DG-105: Non-standard proxy
-        violation = check_non_standard_proxy(proxy_state)
-        if violation:
-            violations.append(violation)
+        # Run all dynamic rules via executor
+        executor = DynamicRuleExecutor(config)
+        violations = await executor.execute(
+            proxy_state,
+            str(expected_implementation),
+            str(expected_admin) if expected_admin else None,
+        )
 
         # Convert violations to findings
         findings = [
@@ -321,6 +300,10 @@ async def verify_proxy(
         ]
 
         # Build summary
+        # Count rules executed (get from registry)
+        from deployguard.rules.registry import registry
+        rules_executed = len(registry.get_dynamic_rules())
+
         summary = ReportSummary(
             total_findings=len(findings),
             critical_count=sum(1 for f in findings if f.severity.value == "critical"),
@@ -329,7 +312,7 @@ async def verify_proxy(
             low_count=sum(1 for f in findings if f.severity.value == "low"),
             info_count=sum(1 for f in findings if f.severity.value == "info"),
             contracts_verified=1,
-            rules_executed=5,
+            rules_executed=rules_executed,
         )
 
         # Determine exit code (non-zero if Critical or High findings)

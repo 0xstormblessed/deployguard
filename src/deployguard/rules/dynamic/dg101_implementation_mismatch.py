@@ -4,6 +4,7 @@ from deployguard.constants import EIP1967_IMPLEMENTATION_SLOT
 from deployguard.models.core import Address
 from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
+from deployguard.rules.base import DynamicRule
 
 RULE_DG_101 = Rule(
     rule_id="DG-101",
@@ -23,10 +24,65 @@ RULE_DG_101 = Rule(
 )
 
 
+class ImplementationMismatchRule(DynamicRule):
+    """DG-101: Check for implementation slot mismatch.
+
+    Verifies that the implementation address stored in the EIP-1967 implementation
+    slot matches the expected implementation address.
+    """
+
+    async def check(
+        self,
+        proxy_state: ProxyState,
+        expected_impl: str,
+        expected_admin: str | None = None,
+    ) -> list[RuleViolation]:
+        """Check if implementation address matches expected.
+
+        Args:
+            proxy_state: Current proxy state from chain
+            expected_impl: Expected implementation address
+            expected_admin: Expected admin address (unused for this rule)
+
+        Returns:
+            List containing violation if mismatch detected, empty list otherwise
+        """
+        violations = []
+        actual_impl = proxy_state.implementation_slot.decoded_address
+
+        if actual_impl and actual_impl.lower() != expected_impl.lower():
+            violations.append(
+                RuleViolation(
+                    rule=self.rule,
+                    severity=self.rule.severity,
+                    message=f"Implementation mismatch: expected {expected_impl}, found {actual_impl}",
+                    recommendation=self.rule.remediation,
+                    storage_data=proxy_state.implementation_slot,
+                    context={
+                        "expected": expected_impl,
+                        "actual": str(actual_impl),
+                        "slot": EIP1967_IMPLEMENTATION_SLOT,
+                        "proxy_address": str(proxy_state.proxy_address),
+                        "block_number": proxy_state.implementation_slot.block_number,
+                    },
+                )
+            )
+
+        return violations
+
+
+# Instantiate rule for registration
+rule_dg101 = ImplementationMismatchRule(RULE_DG_101)
+
+
+# Backward compatibility function (deprecated)
 def check_implementation_mismatch(
     proxy_state: ProxyState, expected_impl: Address
 ) -> RuleViolation | None:
     """Check if implementation address matches expected.
+
+    .. deprecated::
+        Use ImplementationMismatchRule class instead.
 
     Args:
         proxy_state: Current proxy state from chain
@@ -35,21 +91,7 @@ def check_implementation_mismatch(
     Returns:
         RuleViolation if mismatch detected, None otherwise
     """
-    actual_impl = proxy_state.implementation_slot.decoded_address
+    import asyncio
 
-    if actual_impl and actual_impl.lower() != expected_impl.lower():
-        return RuleViolation(
-            rule=RULE_DG_101,
-            severity=Severity.CRITICAL,
-            message=(f"Implementation mismatch: expected {expected_impl}, " f"found {actual_impl}"),
-            recommendation=RULE_DG_101.remediation,
-            storage_data=proxy_state.implementation_slot,
-            context={
-                "expected": str(expected_impl),
-                "actual": str(actual_impl),
-                "slot": EIP1967_IMPLEMENTATION_SLOT,
-                "proxy_address": str(proxy_state.proxy_address),
-                "block_number": proxy_state.implementation_slot.block_number,
-            },
-        )
-    return None
+    violations = asyncio.run(rule_dg101.check(proxy_state, str(expected_impl), None))
+    return violations[0] if violations else None
