@@ -6,7 +6,7 @@ override _authorizeUpgrade() with access control checks.
 
 import re
 
-from deployguard.models.core import SourceFragment, SourceLocation
+from deployguard.models.core import SourceLocation
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ProxyType, ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -65,14 +65,6 @@ class UUPSMissingAuthorizeUpgradeRule(StaticRule):
                 f"Without this, anyone can upgrade the proxy to malicious code."
             )
 
-            source_fragment = None
-            if deployment.location.line_content:
-                source_fragment = SourceFragment(
-                    start_line=deployment.location.line_number,
-                    end_line=deployment.location.line_number,
-                    content=deployment.location.line_content,
-                )
-
             violations.append(
                 RuleViolation(
                     rule=self.rule,
@@ -95,7 +87,6 @@ class UUPSMissingAuthorizeUpgradeRule(StaticRule):
                         f"See: https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable"
                     ),
                     location=deployment.location,
-                    source_fragment=source_fragment,
                     context={
                         "proxy_type": deployment.proxy_type.value,
                         "implementation": deployment.implementation_arg,

@@ -4,7 +4,7 @@ Detects UUPS implementations that override upgradeToAndCall without preserving
 the upgrade functionality.
 """
 
-from deployguard.models.core import SourceFragment
+
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ProxyType, ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -44,14 +44,6 @@ class UUPSUpgradeToAndCallOverrideRule(StaticRule):
                 f"ensure it calls super.upgradeToAndCall() to preserve upgrade functionality."
             )
 
-            source_fragment = None
-            if deployment.location.line_content:
-                source_fragment = SourceFragment(
-                    start_line=deployment.location.line_number,
-                    end_line=deployment.location.line_number,
-                    content=deployment.location.line_content,
-                )
-
             violations.append(
                 RuleViolation(
                     rule=self.rule,
@@ -71,7 +63,6 @@ class UUPSUpgradeToAndCallOverrideRule(StaticRule):
                         f"The default implementation is secure and well-tested."
                     ),
                     location=deployment.location,
-                    source_fragment=source_fragment,
                     context={
                         "proxy_type": deployment.proxy_type.value,
                         "implementation": deployment.implementation_arg,

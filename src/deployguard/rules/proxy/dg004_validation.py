@@ -6,7 +6,7 @@ they contain actual contract bytecode.
 
 import re
 
-from deployguard.models.core import SourceFragment
+
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -70,14 +70,6 @@ class MissingValidationRule(StaticRule):
                         f"leading to a non-functional proxy."
                     )
 
-                    source_fragment = None
-                    if var_info.assignment_location and var_info.assignment_location.line_content:
-                        source_fragment = SourceFragment(
-                            start_line=var_info.assignment_location.line_number,
-                            end_line=var_info.assignment_location.line_number,
-                            content=var_info.assignment_location.line_content,
-                        )
-
                     violations.append(
                         RuleViolation(
                             rule=self.rule,
@@ -94,7 +86,6 @@ class MissingValidationRule(StaticRule):
                                 f"  proxy = new ERC1967Proxy(impl, data);"
                             ),
                             location=var_info.assignment_location,
-                            source_fragment=source_fragment,
                             context={
                                 "variable": impl_arg,
                                 "proxy_type": deployment.proxy_type.value,

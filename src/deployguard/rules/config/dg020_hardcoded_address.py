@@ -6,7 +6,7 @@ environment variables or configuration files.
 
 import re
 
-from deployguard.models.core import SourceFragment, SourceLocation
+from deployguard.models.core import SourceLocation
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -106,11 +106,6 @@ class HardcodedAddressRule(StaticRule):
                                 file_path=analysis.file_path,
                                 line_number=line_num,
                                 line_content=line.strip(),
-                            ),
-                            source_fragment=SourceFragment(
-                                start_line=line_num,
-                                end_line=line_num,
-                                content=line.strip(),
                             ),
                             context={
                                 "address": address,

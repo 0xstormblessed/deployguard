@@ -6,7 +6,7 @@ which can lead to using wrong or malicious implementations.
 
 import re
 
-from deployguard.models.core import SourceFragment
+
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -94,14 +94,6 @@ class HardcodedImplRule(StaticRule):
             )
             location = var_location or deployment.location
 
-        source_fragment = None
-        if location and location.line_content:
-            source_fragment = SourceFragment(
-                start_line=location.line_number,
-                end_line=location.line_number,
-                content=location.line_content,
-            )
-
         return RuleViolation(
             rule=self.rule,
             severity=self.rule.severity,
@@ -117,7 +109,6 @@ class HardcodedImplRule(StaticRule):
                 f"     require(impl.code.length > 0, \"Invalid implementation\");"
             ),
             location=location,
-            source_fragment=source_fragment,
             context={
                 "proxy_type": deployment.proxy_type.value,
                 "implementation_arg": impl_arg,
