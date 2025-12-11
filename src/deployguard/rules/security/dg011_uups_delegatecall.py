@@ -4,7 +4,7 @@ Detects UUPS implementation contracts that contain delegatecall or selfdestruct,
 which can be used to bypass proxy security mechanisms.
 """
 
-from deployguard.models.core import SourceFragment
+
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ProxyType, ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -46,14 +46,6 @@ class UUPSDelegatecallSelfdestructRule(StaticRule):
                 f"be used to bypass security or destroy the proxy."
             )
 
-            source_fragment = None
-            if deployment.location.line_content:
-                source_fragment = SourceFragment(
-                    start_line=deployment.location.line_number,
-                    end_line=deployment.location.line_number,
-                    content=deployment.location.line_content,
-                )
-
             violations.append(
                 RuleViolation(
                     rule=self.rule,
@@ -75,7 +67,6 @@ class UUPSDelegatecallSelfdestructRule(StaticRule):
                         f"Recommended: Use OpenZeppelin's audited UUPS implementation without modifications."
                     ),
                     location=deployment.location,
-                    source_fragment=source_fragment,
                     context={
                         "proxy_type": deployment.proxy_type.value,
                         "implementation": deployment.implementation_arg,

@@ -4,7 +4,7 @@ Detects when proxy deployment and initialization occur in separate transactions,
 which also creates a front-running vulnerability window.
 """
 
-from deployguard.models.core import SourceFragment
+
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -43,14 +43,6 @@ class SeparatedInitRule(StaticRule):
                     f"the deployment and initialization transactions."
                 )
 
-                source_fragment = None
-                if deployment.location.line_content:
-                    source_fragment = SourceFragment(
-                        start_line=deployment.location.line_number,
-                        end_line=deployment.location.line_number,
-                        content=deployment.location.line_content,
-                    )
-
                 violations.append(
                     RuleViolation(
                         rule=self.rule,
@@ -66,7 +58,6 @@ class SeparatedInitRule(StaticRule):
                             f"Avoid stopping broadcast between deployment and initialization."
                         ),
                         location=deployment.location,
-                        source_fragment=source_fragment,
                         context={
                             "proxy_type": deployment.proxy_type.value,
                             "tx_boundary_before": (

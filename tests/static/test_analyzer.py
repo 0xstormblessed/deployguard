@@ -3,13 +3,13 @@
 import pytest
 
 from deployguard.models.rules import Severity
-from deployguard.static.analyzer import (
+from deployguard.rules.proxy import (
     RULE_DG_001,
     RULE_DG_002,
     RULE_DG_003,
     RULE_DG_004,
-    StaticAnalyzer,
 )
+from deployguard.static.analyzer import StaticAnalyzer
 
 
 class TestStaticAnalyzer:

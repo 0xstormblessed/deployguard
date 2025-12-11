@@ -6,7 +6,7 @@ which is a security risk.
 
 import re
 
-from deployguard.models.core import SourceFragment, SourceLocation
+from deployguard.models.core import SourceLocation
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -64,13 +64,6 @@ class PrivateKeyEnvRule(StaticRule):
                         f"Private key loaded from environment variable. "
                         f"This risks exposure through accidental commits, logs, or CI/CD systems."
                     )
-
-                    source_fragment = SourceFragment(
-                        start_line=line_num,
-                        end_line=line_num,
-                        content=line.strip(),
-                    )
-
                     violations.append(
                         RuleViolation(
                             rule=self.rule,
@@ -91,7 +84,6 @@ class PrivateKeyEnvRule(StaticRule):
                                 line_number=line_num,
                                 line_content=line.strip(),
                             ),
-                            source_fragment=source_fragment,
                             context={
                                 "risk": "Private keys in .env can be accidentally committed or exposed",
                                 "env_variable": self._extract_env_var(line),

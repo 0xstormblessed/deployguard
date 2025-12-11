@@ -6,7 +6,7 @@ instead of using a secure admin address.
 
 import re
 
-from deployguard.models.core import SourceFragment, SourceLocation
+from deployguard.models.core import SourceLocation
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.models.static import ScriptAnalysis
 from deployguard.rules.base import StaticRule
@@ -61,13 +61,6 @@ class DeployerAsAdminRule(StaticRule):
                         f"This creates a temporary security risk even if ownership "
                         f"is transferred later."
                     )
-
-                    source_fragment = SourceFragment(
-                        start_line=line_num,
-                        end_line=line_num,
-                        content=line.strip(),
-                    )
-
                     violations.append(
                         RuleViolation(
                             rule=self.rule,
@@ -93,7 +86,6 @@ class DeployerAsAdminRule(StaticRule):
                                 line_number=line_num,
                                 line_content=line.strip(),
                             ),
-                            source_fragment=source_fragment,
                             context={
                                 "pattern": "msg.sender as admin",
                             },
