@@ -1,11 +1,11 @@
-"""DG-103: Uninitialized Proxy rule."""
+"""UNINITIALIZED_PROXY: Uninitialized Proxy rule."""
 
 from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.rules.base import DynamicRule
 
-RULE_DG_103 = Rule(
-    rule_id="DG-103",
+RULE_UNINITIALIZED_PROXY = Rule(
+    rule_id="UNINITIALIZED_PROXY",
     name="Uninitialized Proxy",
     description="The implementation slot is empty (zero address), indicating an uninitialized proxy.",
     severity=Severity.HIGH,
@@ -23,7 +23,7 @@ RULE_DG_103 = Rule(
 
 
 class UninitializedProxyRule(DynamicRule):
-    """DG-103: Check for uninitialized proxy.
+    """UNINITIALIZED_PROXY: Check for uninitialized proxy.
 
     Detects proxies where the implementation slot is empty (zero address),
     indicating the proxy was never initialized.
@@ -69,7 +69,7 @@ class UninitializedProxyRule(DynamicRule):
 
 
 # Instantiate rule for registration
-rule_dg103 = UninitializedProxyRule(RULE_DG_103)
+rule_uninitialized_proxy = UninitializedProxyRule(RULE_UNINITIALIZED_PROXY)
 
 
 # Backward compatibility function (deprecated)
@@ -87,5 +87,5 @@ def check_uninitialized_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     """
     import asyncio
 
-    violations = asyncio.run(rule_dg103.check(proxy_state, "", None))
+    violations = asyncio.run(rule_uninitialized_proxy.check(proxy_state, "", None))
     return violations[0] if violations else None

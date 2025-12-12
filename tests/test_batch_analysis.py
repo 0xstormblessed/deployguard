@@ -187,16 +187,16 @@ class TestFileAnalysisResult:
         findings = [
             Finding(
                 id="1",
-                rule_id="DG-001",
+                rule_id="NON_ATOMIC_INIT",
                 title="Test",
                 description="Test",
                 severity=Severity.CRITICAL,
             ),
             Finding(
-                id="2", rule_id="DG-002", title="Test", description="Test", severity=Severity.HIGH
+                id="2", rule_id="HARDCODED_IMPL", title="Test", description="Test", severity=Severity.HIGH
             ),
             Finding(
-                id="3", rule_id="DG-003", title="Test", description="Test", severity=Severity.HIGH
+                id="3", rule_id="HARDCODED_IMPL", title="Test", description="Test", severity=Severity.HIGH
             ),
         ]
 
@@ -224,7 +224,7 @@ class TestBatchAnalysisReport:
             findings=[
                 Finding(
                     id="1",
-                    rule_id="DG-001",
+                    rule_id="NON_ATOMIC_INIT",
                     title="Test",
                     description="Test",
                     severity=Severity.HIGH,
@@ -298,14 +298,14 @@ class TestBatchAnalysisReport:
             findings=[
                 Finding(
                     id="1",
-                    rule_id="DG-001",
+                    rule_id="NON_ATOMIC_INIT",
                     title="Test",
                     description="Test",
                     severity=Severity.CRITICAL,
                 ),
                 Finding(
                     id="2",
-                    rule_id="DG-002",
+                    rule_id="HARDCODED_IMPL",
                     title="Test",
                     description="Test",
                     severity=Severity.HIGH,

@@ -1,4 +1,4 @@
-"""DG-101: Implementation Slot Mismatch rule."""
+"""IMPL_MISMATCH: Implementation Slot Mismatch rule."""
 
 from deployguard.constants import EIP1967_IMPLEMENTATION_SLOT
 from deployguard.models.core import Address
@@ -6,16 +6,26 @@ from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.rules.base import DynamicRule
 
-RULE_DG_101 = Rule(
-    rule_id="DG-101",
+RULE_IMPL_MISMATCH = Rule(
+    rule_id="IMPL_MISMATCH",
     name="Implementation Slot Mismatch",
     description="The implementation address in the EIP-1967 slot does not match the expected address.",
     severity=Severity.CRITICAL,
     category=RuleCategory.DYNAMIC,
     references=[
-        "https://eips.ethereum.org/EIP-1967",
+        "https://eips.ethereum.org/EIPS/eip-1967",
         "https://docs.openzeppelin.com/upgrades-plugins/1.x/proxies",
     ],
+    hack_references=[
+        "https://rekt.news/uspd-rekt/",
+        "https://dedaub.com/blog/the-cpimp-attack-an-insanely-far-reaching-vulnerability-successfully-mitigated/",
+    ],
+    real_world_context=(
+        "Implementation mismatches can indicate a CPIMP (Clandestine Proxy Initialization Mempool Probe) attack. "
+        "Attackers monitor mempools for proxy deployments, then front-run to initialize with a malicious "
+        "implementation or gain admin control. Dedaub identified CPIMP as affecting thousands of contracts "
+        "across multiple chains. Always verify the on-chain implementation matches your expected deployment."
+    ),
     remediation=(
         "Verify the deployment transaction was not front-run. "
         "If the mismatch is unexpected, DO NOT interact with this proxy. "
@@ -25,7 +35,7 @@ RULE_DG_101 = Rule(
 
 
 class ImplementationMismatchRule(DynamicRule):
-    """DG-101: Check for implementation slot mismatch.
+    """IMPL_MISMATCH: Check for implementation slot mismatch.
 
     Verifies that the implementation address stored in the EIP-1967 implementation
     slot matches the expected implementation address.
@@ -72,7 +82,7 @@ class ImplementationMismatchRule(DynamicRule):
 
 
 # Instantiate rule for registration
-rule_dg101 = ImplementationMismatchRule(RULE_DG_101)
+rule_impl_mismatch = ImplementationMismatchRule(RULE_IMPL_MISMATCH)
 
 
 # Backward compatibility function (deprecated)
@@ -93,5 +103,5 @@ def check_implementation_mismatch(
     """
     import asyncio
 
-    violations = asyncio.run(rule_dg101.check(proxy_state, str(expected_impl), None))
+    violations = asyncio.run(rule_impl_mismatch.check(proxy_state, str(expected_impl), None))
     return violations[0] if violations else None

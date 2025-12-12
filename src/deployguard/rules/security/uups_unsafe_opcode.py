@@ -1,4 +1,4 @@
-"""DG-011: UUPS Implementation Uses Delegatecall or Selfdestruct.
+"""UUPS_UNSAFE_OPCODE: UUPS Implementation Uses Delegatecall or Selfdestruct.
 
 Detects UUPS implementation contracts that contain delegatecall or selfdestruct,
 which can be used to bypass proxy security mechanisms.
@@ -80,17 +80,16 @@ class UUPSDelegatecallSelfdestructRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_011 = Rule(
-    rule_id="DG-011",
+RULE_UUPS_UNSAFE_OPCODE = Rule(
+    rule_id="UUPS_UNSAFE_OPCODE",
     name="UUPS Implementation Uses Delegatecall or Selfdestruct",
     description="UUPS implementation contains dangerous opcodes (delegatecall/selfdestruct)",
     severity=Severity.CRITICAL,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable",
-        "https://blog.openzeppelin.com/the-transparent-proxy-pattern/",
+        "https://rareskills.io/post/uups-proxy",
     ],
     remediation="Remove delegatecall and selfdestruct from UUPS implementation contract",
 )
 
-rule_dg011 = UUPSDelegatecallSelfdestructRule(RULE_DG_011)
+rule_uups_unsafe_opcode = UUPSDelegatecallSelfdestructRule(RULE_UUPS_UNSAFE_OPCODE)

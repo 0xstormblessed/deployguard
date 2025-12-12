@@ -1,4 +1,4 @@
-"""Tests for dynamic analysis rules (DG-101 to DG-105)."""
+"""Tests for dynamic analysis rules (IMPL_MISMATCH to NON_STANDARD_PROXY)."""
 
 from deployguard.constants import (
     EIP1967_ADMIN_SLOT,
@@ -14,11 +14,11 @@ from deployguard.models.dynamic import (
 )
 from deployguard.models.rules import Severity
 from deployguard.rules.dynamic import (
-    RULE_DG_101,
-    RULE_DG_102,
-    RULE_DG_103,
-    RULE_DG_104,
-    RULE_DG_105,
+    RULE_IMPL_MISMATCH,
+    RULE_SHADOW_CONTRACT,
+    RULE_UNINITIALIZED_PROXY,
+    RULE_ADMIN_MISMATCH,
+    RULE_NON_STANDARD_PROXY,
     check_admin_mismatch,
     check_implementation_mismatch,
     check_non_standard_proxy,
@@ -28,7 +28,7 @@ from deployguard.rules.dynamic import (
 
 
 class TestDG101ImplementationMismatch:
-    """Tests for DG-101: Implementation Slot Mismatch."""
+    """Tests for IMPL_MISMATCH: Implementation Slot Mismatch."""
 
     def test_no_violation_when_match(self) -> None:
         """Test no violation when implementation matches."""
@@ -71,7 +71,7 @@ class TestDG101ImplementationMismatch:
         result = check_implementation_mismatch(proxy_state, expected_impl)
 
         assert result is not None
-        assert result.rule.rule_id == "DG-101"
+        assert result.rule.rule_id == "IMPL_MISMATCH"
         assert result.severity == Severity.CRITICAL
         assert expected_impl in result.message
         assert actual_impl in result.message
@@ -103,14 +103,14 @@ class TestDG101ImplementationMismatch:
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_DG_101.rule_id == "DG-101"
-        assert RULE_DG_101.severity == Severity.CRITICAL
-        assert len(RULE_DG_101.references) > 0
-        assert RULE_DG_101.remediation is not None
+        assert RULE_IMPL_MISMATCH.rule_id == "IMPL_MISMATCH"
+        assert RULE_IMPL_MISMATCH.severity == Severity.CRITICAL
+        assert len(RULE_IMPL_MISMATCH.references) > 0
+        assert RULE_IMPL_MISMATCH.remediation is not None
 
 
 class TestDG102ShadowContract:
-    """Tests for DG-102: Shadow Contract Detection."""
+    """Tests for SHADOW_CONTRACT: Shadow Contract Detection."""
 
     def test_no_violation_without_delegatecall(self) -> None:
         """Test no violation when implementation has no DELEGATECALL."""
@@ -168,7 +168,7 @@ class TestDG102ShadowContract:
         result = check_shadow_contract(proxy_state, bytecode_analysis)
 
         assert result is not None
-        assert result.rule.rule_id == "DG-102"
+        assert result.rule.rule_id == "SHADOW_CONTRACT"
         assert result.severity == Severity.HIGH
         assert "shadow" in result.message.lower()
         assert result.bytecode_data == bytecode_analysis
@@ -178,13 +178,13 @@ class TestDG102ShadowContract:
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_DG_102.rule_id == "DG-102"
-        assert RULE_DG_102.severity == Severity.HIGH
-        assert len(RULE_DG_102.references) > 0
+        assert RULE_SHADOW_CONTRACT.rule_id == "SHADOW_CONTRACT"
+        assert RULE_SHADOW_CONTRACT.severity == Severity.HIGH
+        assert len(RULE_SHADOW_CONTRACT.references) > 0
 
 
 class TestDG103UninitializedProxy:
-    """Tests for DG-103: Uninitialized Proxy."""
+    """Tests for UNINITIALIZED_PROXY: Uninitialized Proxy."""
 
     def test_no_violation_when_initialized(self) -> None:
         """Test no violation when proxy is initialized."""
@@ -224,7 +224,7 @@ class TestDG103UninitializedProxy:
         result = check_uninitialized_proxy(proxy_state)
 
         assert result is not None
-        assert result.rule.rule_id == "DG-103"
+        assert result.rule.rule_id == "UNINITIALIZED_PROXY"
         assert result.severity == Severity.HIGH
         assert "uninitialized" in result.message.lower()
         assert result.storage_data == proxy_state.implementation_slot
@@ -232,13 +232,13 @@ class TestDG103UninitializedProxy:
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_DG_103.rule_id == "DG-103"
-        assert RULE_DG_103.severity == Severity.HIGH
-        assert len(RULE_DG_103.references) > 0
+        assert RULE_UNINITIALIZED_PROXY.rule_id == "UNINITIALIZED_PROXY"
+        assert RULE_UNINITIALIZED_PROXY.severity == Severity.HIGH
+        assert len(RULE_UNINITIALIZED_PROXY.references) > 0
 
 
 class TestDG104AdminMismatch:
-    """Tests for DG-104: Admin Slot Mismatch."""
+    """Tests for ADMIN_MISMATCH: Admin Slot Mismatch."""
 
     def test_no_violation_when_match(self) -> None:
         """Test no violation when admin matches."""
@@ -297,7 +297,7 @@ class TestDG104AdminMismatch:
         result = check_admin_mismatch(proxy_state, expected_admin)
 
         assert result is not None
-        assert result.rule.rule_id == "DG-104"
+        assert result.rule.rule_id == "ADMIN_MISMATCH"
         assert result.severity == Severity.MEDIUM
         assert expected_admin in result.message
         assert actual_admin in result.message
@@ -346,13 +346,13 @@ class TestDG104AdminMismatch:
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_DG_104.rule_id == "DG-104"
-        assert RULE_DG_104.severity == Severity.MEDIUM
-        assert len(RULE_DG_104.references) > 0
+        assert RULE_ADMIN_MISMATCH.rule_id == "ADMIN_MISMATCH"
+        assert RULE_ADMIN_MISMATCH.severity == Severity.MEDIUM
+        assert len(RULE_ADMIN_MISMATCH.references) > 0
 
 
 class TestDG105NonStandardProxy:
-    """Tests for DG-105: Non-Standard Proxy Pattern."""
+    """Tests for NON_STANDARD_PROXY: Non-Standard Proxy Pattern."""
 
     def test_no_violation_when_standard(self) -> None:
         """Test no violation when proxy uses standard EIP-1967."""
@@ -393,7 +393,7 @@ class TestDG105NonStandardProxy:
         result = check_non_standard_proxy(proxy_state)
 
         assert result is not None
-        assert result.rule.rule_id == "DG-105"
+        assert result.rule.rule_id == "NON_STANDARD_PROXY"
         assert result.severity == Severity.INFO
         assert "non-standard" in result.message.lower() or "standard" in result.message.lower()
         assert result.context["proxy_standard"] == "unknown"
@@ -401,6 +401,6 @@ class TestDG105NonStandardProxy:
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_DG_105.rule_id == "DG-105"
-        assert RULE_DG_105.severity == Severity.INFO
-        assert len(RULE_DG_105.references) > 0
+        assert RULE_NON_STANDARD_PROXY.rule_id == "NON_STANDARD_PROXY"
+        assert RULE_NON_STANDARD_PROXY.severity == Severity.INFO
+        assert len(RULE_NON_STANDARD_PROXY.references) > 0

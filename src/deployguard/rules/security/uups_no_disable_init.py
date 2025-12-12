@@ -1,4 +1,4 @@
-"""DG-009: UUPS Missing _disableInitializers in Constructor.
+"""UUPS_NO_DISABLE_INIT: UUPS Missing _disableInitializers in Constructor.
 
 Detects UUPS implementations that don't call _disableInitializers() in their
 constructor, leaving them vulnerable to direct initialization attacks.
@@ -80,17 +80,16 @@ class UUPSMissingDisableInitializersRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_009 = Rule(
-    rule_id="DG-009",
+RULE_UUPS_NO_DISABLE_INIT = Rule(
+    rule_id="UUPS_NO_DISABLE_INIT",
     name="UUPS Missing _disableInitializers in Constructor",
     description="UUPS implementation constructor must call _disableInitializers()",
     severity=Severity.HIGH,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/upgrades-plugins/1.x/writing-upgradeable#initializing_the_implementation_contract",
-        "https://forum.openzeppelin.com/t/uups-proxies-tutorial-solidity-javascript/7786",
+        "https://rareskills.io/post/uups-proxy",#initializing_the_implementation_contrrac:
     ],
     remediation="Call _disableInitializers() in implementation contract constructor",
 )
 
-rule_dg009 = UUPSMissingDisableInitializersRule(RULE_DG_009)
+rule_uups_no_disable_init = UUPSMissingDisableInitializersRule(RULE_UUPS_NO_DISABLE_INIT)

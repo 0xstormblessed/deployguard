@@ -1,11 +1,11 @@
-"""DG-102: Shadow Contract Detection rule."""
+"""SHADOW_CONTRACT: Shadow Contract Detection rule."""
 
 from deployguard.models.dynamic import BytecodeAnalysis, ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.rules.base import DynamicRule
 
-RULE_DG_102 = Rule(
-    rule_id="DG-102",
+RULE_SHADOW_CONTRACT = Rule(
+    rule_id="SHADOW_CONTRACT",
     name="Shadow Contract Detection",
     description=(
         "The contract in the implementation slot contains DELEGATECALL, "
@@ -27,7 +27,7 @@ RULE_DG_102 = Rule(
 
 
 class ShadowContractRule(DynamicRule):
-    """DG-102: Check for shadow contracts (implementation contains DELEGATECALL).
+    """SHADOW_CONTRACT: Check for shadow contracts (implementation contains DELEGATECALL).
 
     Detects when the implementation contract contains DELEGATECALL opcode,
     which may indicate a malicious middleman proxy pattern.
@@ -85,7 +85,7 @@ class ShadowContractRule(DynamicRule):
 
 
 # Instantiate rule for registration
-rule_dg102 = ShadowContractRule(RULE_DG_102)
+rule_shadow_contract = ShadowContractRule(RULE_SHADOW_CONTRACT)
 
 
 # Backward compatibility function (deprecated)
@@ -108,10 +108,10 @@ def check_shadow_contract(
         return None
 
     return RuleViolation(
-        rule=RULE_DG_102,
+        rule=RULE_SHADOW_CONTRACT,
         severity=Severity.HIGH,
         message="Suspected shadow contract: implementation contains DELEGATECALL opcode",
-        recommendation=RULE_DG_102.remediation,
+        recommendation=RULE_SHADOW_CONTRACT.remediation,
         bytecode_data=bytecode_analysis,
         storage_data=proxy_state.implementation_slot,
         context={

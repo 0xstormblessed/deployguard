@@ -4,10 +4,9 @@ import pytest
 
 from deployguard.models.rules import Severity
 from deployguard.rules.proxy import (
-    RULE_DG_001,
-    RULE_DG_002,
-    RULE_DG_003,
-    RULE_DG_004,
+    RULE_NON_ATOMIC_INIT,
+    RULE_HARDCODED_IMPL,
+    RULE_MISSING_IMPL_VALIDATION,
 )
 from deployguard.static.analyzer import StaticAnalyzer
 
@@ -27,17 +26,14 @@ class TestStaticAnalyzer:
 
     def test_rules_defined(self) -> None:
         """Test that all rules are properly defined."""
-        assert RULE_DG_001.rule_id == "DG-001"
-        assert RULE_DG_001.severity == Severity.CRITICAL
+        assert RULE_NON_ATOMIC_INIT.rule_id == "NON_ATOMIC_INIT"
+        assert RULE_NON_ATOMIC_INIT.severity == Severity.CRITICAL
 
-        assert RULE_DG_002.rule_id == "DG-002"
-        assert RULE_DG_002.severity == Severity.HIGH
+        assert RULE_HARDCODED_IMPL.rule_id == "HARDCODED_IMPL"
+        assert RULE_HARDCODED_IMPL.severity == Severity.MEDIUM
 
-        assert RULE_DG_003.rule_id == "DG-003"
-        assert RULE_DG_003.severity == Severity.MEDIUM
-
-        assert RULE_DG_004.rule_id == "DG-004"
-        assert RULE_DG_004.severity == Severity.LOW
+        assert RULE_MISSING_IMPL_VALIDATION.rule_id == "MISSING_IMPL_VALIDATION"
+        assert RULE_MISSING_IMPL_VALIDATION.severity == Severity.LOW
 
 
 class TestStaticAnalyzerIntegration:
@@ -72,8 +68,8 @@ contract ERC1967Proxy {
         analysis = analyzer.analyze_source(source, "Vulnerable.s.sol")
         violations = analyzer.run_rules(analysis)
 
-        # Should find DG-001 (non-atomic init)
-        dg001_violations = [v for v in violations if v.rule.rule_id == "DG-001"]
+        # Should find NON_ATOMIC_INIT
+        dg001_violations = [v for v in violations if v.rule.rule_id == "NON_ATOMIC_INIT"]
         assert len(dg001_violations) == 1
         assert dg001_violations[0].severity == Severity.CRITICAL
 
@@ -106,8 +102,8 @@ contract ERC1967Proxy {
         analysis = analyzer.analyze_source(source, "Safe.s.sol")
         violations = analyzer.run_rules(analysis)
 
-        # Should not find DG-001 (safe atomic init)
-        dg001_violations = [v for v in violations if v.rule.rule_id == "DG-001"]
+        # Should not find NON_ATOMIC_INIT (safe atomic init)
+        dg001_violations = [v for v in violations if v.rule.rule_id == "NON_ATOMIC_INIT"]
         assert len(dg001_violations) == 0
 
     @pytest.mark.slow
@@ -138,8 +134,8 @@ contract ERC1967Proxy {
         analysis = analyzer.analyze_source(source, "Hardcoded.s.sol")
         violations = analyzer.run_rules(analysis)
 
-        # Should find DG-003 (hardcoded address)
-        dg003_violations = [v for v in violations if v.rule.rule_id == "DG-003"]
+        # Should find HARDCODED_IMPL (hardcoded address)
+        dg003_violations = [v for v in violations if v.rule.rule_id == "HARDCODED_IMPL"]
         assert len(dg003_violations) == 1
         assert dg003_violations[0].severity == Severity.MEDIUM
 
@@ -172,8 +168,8 @@ contract TransparentUpgradeableProxy {
         analysis = analyzer.analyze_source(source, "Transparent.s.sol")
         violations = analyzer.run_rules(analysis)
 
-        # Should find DG-001 for empty init
-        dg001_violations = [v for v in violations if v.rule.rule_id == "DG-001"]
+        # Should find NON_ATOMIC_INIT for empty init
+        dg001_violations = [v for v in violations if v.rule.rule_id == "NON_ATOMIC_INIT"]
         assert len(dg001_violations) == 1
 
     @pytest.mark.slow

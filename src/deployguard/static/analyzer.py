@@ -237,6 +237,9 @@ class StaticAnalyzer:
                 severity=violation.severity,
                 location=violation.location,
                 recommendation=violation.recommendation,
+                references=violation.rule.references,
+                hack_references=violation.rule.hack_references,
+                real_world_context=violation.rule.real_world_context,
             )
             findings.append(finding)
 

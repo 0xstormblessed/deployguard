@@ -69,14 +69,14 @@ class TestDeployGuardConfig:
         data = {
             "rules": {
                 "severity_overrides": {
-                    "DG-001": "low",
-                    "DG-002": "medium",
+                    "NON_ATOMIC_INIT": "low",
+                    "HARDCODED_IMPL": "medium",
                 }
             }
         }
         config = DeployGuardConfig.from_dict(data)
-        assert config.severity_overrides["DG-001"] == Severity.LOW
-        assert config.severity_overrides["DG-002"] == Severity.MEDIUM
+        assert config.severity_overrides["NON_ATOMIC_INIT"] == Severity.LOW
+        assert config.severity_overrides["HARDCODED_IMPL"] == Severity.MEDIUM
 
     def test_config_discover(self) -> None:
         """Test config discovery."""

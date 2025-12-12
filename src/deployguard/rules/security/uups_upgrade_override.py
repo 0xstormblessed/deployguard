@@ -1,4 +1,4 @@
-"""DG-010: UUPS Override of upgradeToAndCall.
+"""UUPS_UPGRADE_OVERRIDE: UUPS Override of upgradeToAndCall.
 
 Detects UUPS implementations that override upgradeToAndCall without preserving
 the upgrade functionality.
@@ -75,16 +75,16 @@ class UUPSUpgradeToAndCallOverrideRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_010 = Rule(
-    rule_id="DG-010",
+RULE_UUPS_UPGRADE_OVERRIDE = Rule(
+    rule_id="UUPS_UPGRADE_OVERRIDE",
     name="UUPS Override of upgradeToAndCall",
     description="UUPS implementation overrides upgradeToAndCall, verify it preserves functionality",
     severity=Severity.HIGH,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable",
+        "https://rareskills.io/post/uups-proxy",
     ],
     remediation="Ensure upgradeToAndCall override calls super.upgradeToAndCall()",
 )
 
-rule_dg010 = UUPSUpgradeToAndCallOverrideRule(RULE_DG_010)
+rule_uups_upgrade_override = UUPSUpgradeToAndCallOverrideRule(RULE_UUPS_UPGRADE_OVERRIDE)

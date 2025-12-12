@@ -1,4 +1,4 @@
-"""DG-003: Hardcoded Implementation Address.
+"""HARDCODED_IMPL: Hardcoded Implementation Address.
 
 Detects when implementation addresses are hardcoded in deployment scripts,
 which can lead to using wrong or malicious implementations.
@@ -119,8 +119,8 @@ class HardcodedImplRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_003 = Rule(
-    rule_id="DG-003",
+RULE_HARDCODED_IMPL = Rule(
+    rule_id="HARDCODED_IMPL",
     name="Hardcoded Implementation Address",
     description="Implementation address is hardcoded in script",
     severity=Severity.MEDIUM,
@@ -131,4 +131,4 @@ RULE_DG_003 = Rule(
     remediation="Deploy implementation in same script or use environment variables",
 )
 
-rule_dg003 = HardcodedImplRule(RULE_DG_003)
+rule_hardcoded_impl = HardcodedImplRule(RULE_HARDCODED_IMPL)

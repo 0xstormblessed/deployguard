@@ -1,36 +1,36 @@
 """Security-related rules for deployment scripts."""
 
 from deployguard.rules.registry import registry
-from deployguard.rules.security.dg005_private_key import RULE_DG_005, rule_dg005
-from deployguard.rules.security.dg006_ownership import RULE_DG_006, rule_dg006
-from deployguard.rules.security.dg007_deployer_admin import RULE_DG_007, rule_dg007
-from deployguard.rules.security.dg008_uups_authorize import RULE_DG_008, rule_dg008
-from deployguard.rules.security.dg009_uups_disable_init import RULE_DG_009, rule_dg009
-from deployguard.rules.security.dg010_uups_upgrade_call import RULE_DG_010, rule_dg010
-from deployguard.rules.security.dg011_uups_delegatecall import RULE_DG_011, rule_dg011
+from deployguard.rules.security.private_key_env import RULE_PRIVATE_KEY_ENV, rule_private_key_env
+from deployguard.rules.security.missing_ownership_transfer import RULE_MISSING_OWNERSHIP_TRANSFER, rule_missing_ownership_transfer
+from deployguard.rules.security.deployer_admin import RULE_DEPLOYER_ADMIN, rule_deployer_admin
+from deployguard.rules.security.uups_no_authorize import RULE_UUPS_NO_AUTHORIZE, rule_uups_no_authorize
+from deployguard.rules.security.uups_no_disable_init import RULE_UUPS_NO_DISABLE_INIT, rule_uups_no_disable_init
+from deployguard.rules.security.uups_upgrade_override import RULE_UUPS_UPGRADE_OVERRIDE, rule_uups_upgrade_override
+from deployguard.rules.security.uups_unsafe_opcode import RULE_UUPS_UNSAFE_OPCODE, rule_uups_unsafe_opcode
 
 # Register all security rules
-registry.register_static(rule_dg005)
-registry.register_static(rule_dg006)
-registry.register_static(rule_dg007)
-registry.register_static(rule_dg008)
-registry.register_static(rule_dg009)
-registry.register_static(rule_dg010)
-registry.register_static(rule_dg011)
+registry.register_static(rule_private_key_env)
+registry.register_static(rule_missing_ownership_transfer)
+registry.register_static(rule_deployer_admin)
+registry.register_static(rule_uups_no_authorize)
+registry.register_static(rule_uups_no_disable_init)
+registry.register_static(rule_uups_upgrade_override)
+registry.register_static(rule_uups_unsafe_opcode)
 
 __all__ = [
-    "RULE_DG_005",
-    "RULE_DG_006",
-    "RULE_DG_007",
-    "RULE_DG_008",
-    "RULE_DG_009",
-    "RULE_DG_010",
-    "RULE_DG_011",
-    "rule_dg005",
-    "rule_dg006",
-    "rule_dg007",
-    "rule_dg008",
-    "rule_dg009",
-    "rule_dg010",
-    "rule_dg011",
+    "RULE_PRIVATE_KEY_ENV",
+    "RULE_MISSING_OWNERSHIP_TRANSFER",
+    "RULE_DEPLOYER_ADMIN",
+    "RULE_UUPS_NO_AUTHORIZE",
+    "RULE_UUPS_NO_DISABLE_INIT",
+    "RULE_UUPS_UPGRADE_OVERRIDE",
+    "RULE_UUPS_UNSAFE_OPCODE",
+    "rule_private_key_env",
+    "rule_missing_ownership_transfer",
+    "rule_deployer_admin",
+    "rule_uups_no_authorize",
+    "rule_uups_no_disable_init",
+    "rule_uups_upgrade_override",
+    "rule_uups_unsafe_opcode",
 ]

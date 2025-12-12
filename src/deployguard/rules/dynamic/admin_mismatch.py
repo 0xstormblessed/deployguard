@@ -1,12 +1,12 @@
-"""DG-104: Admin Slot Mismatch rule."""
+"""ADMIN_MISMATCH: Admin Slot Mismatch rule."""
 
 from deployguard.models.core import Address
 from deployguard.models.dynamic import ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.rules.base import DynamicRule
 
-RULE_DG_104 = Rule(
-    rule_id="DG-104",
+RULE_ADMIN_MISMATCH = Rule(
+    rule_id="ADMIN_MISMATCH",
     name="Admin Slot Mismatch",
     description="The admin address in the EIP-1967 admin slot does not match expected.",
     severity=Severity.MEDIUM,
@@ -25,7 +25,7 @@ RULE_DG_104 = Rule(
 
 
 class AdminMismatchRule(DynamicRule):
-    """DG-104: Check for admin slot mismatch.
+    """ADMIN_MISMATCH: Check for admin slot mismatch.
 
     Verifies that the admin address stored in the EIP-1967 admin slot
     matches the expected admin address.
@@ -75,7 +75,7 @@ class AdminMismatchRule(DynamicRule):
 
 
 # Instantiate rule for registration
-rule_dg104 = AdminMismatchRule(RULE_DG_104)
+rule_admin_mismatch = AdminMismatchRule(RULE_ADMIN_MISMATCH)
 
 
 # Backward compatibility function (deprecated)
@@ -99,5 +99,5 @@ def check_admin_mismatch(
     if not expected_admin:
         return None
 
-    violations = asyncio.run(rule_dg104.check(proxy_state, "", str(expected_admin)))
+    violations = asyncio.run(rule_admin_mismatch.check(proxy_state, "", str(expected_admin)))
     return violations[0] if violations else None

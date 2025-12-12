@@ -1,4 +1,4 @@
-"""DG-013: No Fork Test for Deployment.
+"""NO_FORK_TEST: No Fork Test for Deployment.
 
 Detects deployments that have tests but no fork tests against real network state.
 Fork tests are crucial for verifying deployments work with actual on-chain state.
@@ -131,8 +131,8 @@ class NoForkTestRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_013 = Rule(
-    rule_id="DG-013",
+RULE_NO_FORK_TEST = Rule(
+    rule_id="NO_FORK_TEST",
     name="No Fork Test for Deployment",
     description="Deployment has tests but no fork test against mainnet state",
     severity=Severity.MEDIUM,
@@ -144,4 +144,4 @@ RULE_DG_013 = Rule(
     remediation="Add a fork test using vm.createSelectFork()",
 )
 
-rule_dg013 = NoForkTestRule(RULE_DG_013)
+rule_no_fork_test = NoForkTestRule(RULE_NO_FORK_TEST)

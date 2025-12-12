@@ -248,6 +248,9 @@ def _violation_to_finding(violation: RuleViolation, finding_id: str) -> Finding:
         severity=violation.severity,
         recommendation=violation.recommendation,
         on_chain_evidence=on_chain_evidence,
+        references=violation.rule.references,
+        hack_references=violation.rule.hack_references,
+        real_world_context=violation.rule.real_world_context,
     )
 
 
