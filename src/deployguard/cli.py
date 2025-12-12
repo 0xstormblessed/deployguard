@@ -20,6 +20,26 @@ from deployguard.static.analyzer import StaticAnalyzer
 console = Console()
 
 
+def _print_finding_references(finding: Finding) -> None:
+    """Print references for a finding (hack refs, docs, real-world context)."""
+    # Real-world context
+    if finding.real_world_context:
+        console.print(f"\n  [yellow]Warning Why this matters:[/yellow]")
+        console.print(f"  {finding.real_world_context}")
+
+    # Hack references
+    if finding.hack_references:
+        console.print(f"\n  [red]Related Exploits:[/red]")
+        for hack_ref in finding.hack_references:
+            console.print(f"    - [link={hack_ref}]{hack_ref}[/link]")
+
+    # General references
+    if finding.references:
+        console.print(f"\n  [blue]Documentation:[/blue]")
+        for ref in finding.references:
+            console.print(f"    - [link={ref}]{ref}[/link]")
+
+
 def _print_single_file_findings(file_path: Path, findings: list) -> None:
     """Print findings for a single file."""
     if not findings:
@@ -43,8 +63,12 @@ def _print_single_file_findings(file_path: Path, findings: list) -> None:
         if finding.location:
             console.print(f"  Location: line {finding.location.line}")
         console.print(f"  {finding.description}")
+
+        # Print hack references and real-world context
+        _print_finding_references(finding)
+
         if finding.recommendation:
-            console.print(f"  [dim]→ {finding.recommendation}[/dim]")
+            console.print(f"\n  [dim]Recommendation: {finding.recommendation}[/dim]")
         console.print()
 
 
@@ -104,8 +128,11 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
 
                 console.print(f"  Description: {finding.description}")
 
+                # Print hack references and real-world context
+                _print_finding_references(finding)
+
                 if finding.recommendation:
-                    console.print(f"  Recommendation: {finding.recommendation}")
+                    console.print(f"\n  [dim]Recommendation: {finding.recommendation}[/dim]")
 
                 console.print()
 
@@ -176,6 +203,9 @@ def _print_batch_report_json(report: BatchAnalysisReport) -> None:
                             else None
                         ),
                         "recommendation": f.recommendation,
+                        "references": f.references,
+                        "hack_references": f.hack_references,
+                        "real_world_context": f.real_world_context,
                     }
                     for f in result.findings
                 ],
@@ -265,6 +295,9 @@ def audit(
                     severity=v.severity,
                     location=v.location,
                     recommendation=v.recommendation,
+                    references=v.rule.references,
+                    hack_references=v.rule.hack_references,
+                    real_world_context=v.rule.real_world_context,
                 )
                 for v in violations
             ]
@@ -368,6 +401,9 @@ def verify(proxy_address: str, rpc: str, expected: str, admin: str | None, outpu
                             "description": f.description,
                             "recommendation": f.recommendation,
                             "on_chain_evidence": f.on_chain_evidence,
+                            "references": f.references,
+                            "hack_references": f.hack_references,
+                            "real_world_context": f.real_world_context,
                         }
                         for f in report.findings
                     ],
@@ -417,7 +453,11 @@ def verify(proxy_address: str, rpc: str, expected: str, admin: str | None, outpu
                             f"  Severity: [{severity_color}]{finding.severity.value}[/{severity_color}]"
                         )
                         console.print(f"  {finding.description}")
-                        console.print(f"  [dim]→ {finding.recommendation}[/dim]")
+
+                        # Print hack references and real-world context
+                        _print_finding_references(finding)
+
+                        console.print(f"\n  [dim]Recommendation: {finding.recommendation}[/dim]")
                 else:
                     console.print("[bold green]✓ No issues found[/bold green]")
 
@@ -435,6 +475,230 @@ def verify(proxy_address: str, rpc: str, expected: str, admin: str | None, outpu
 
     exit_code = asyncio.run(run_verification())
     sys.exit(exit_code)
+
+
+@cli.command()
+@click.argument("path", type=click.Path(exists=True), default=".")
+@click.option(
+    "-o",
+    "--output",
+    type=click.Choice(["console", "json"]),
+    default="console",
+    help="Output format",
+)
+def check(path: str, output: str) -> None:
+    """Check test coverage for deployment scripts.
+
+    PATH can be a Foundry project directory (defaults to current directory).
+
+    Examples:
+        deployguard check
+        deployguard check ./my-project
+        deployguard check -o json
+    """
+    from deployguard.testing.analyzer import analyze_test_coverage_from_path
+
+    try:
+        analysis = analyze_test_coverage_from_path(path)
+
+        if not analysis:
+            console.print("[red]Error:[/red] No Foundry project found at this path")
+            console.print("[dim]Make sure you're in a directory with foundry.toml[/dim]")
+            sys.exit(1)
+
+        if output == "json":
+            # JSON output
+            result = {
+                "project_root": str(analysis.project_root),
+                "total_scripts": len(analysis.deploy_scripts),
+                "scripts_with_tests": analysis.scripts_with_tests,
+                "scripts_without_tests": analysis.scripts_without_tests,
+                "scripts_with_fork_tests": analysis.scripts_with_fork_tests,
+                "coverage": [
+                    {
+                        "script": str(script.relative_to(analysis.project_root)),
+                        "has_any_test": cov.has_any_test,
+                        "has_fork_test": cov.has_fork_test,
+                        "test_calls_run": cov.test_calls_run,
+                        "test_files": [
+                            str(f.relative_to(analysis.project_root)) for f in cov.test_files
+                        ],
+                    }
+                    for script, cov in analysis.coverage.items()
+                ],
+            }
+            console.print_json(data=result)
+        else:
+            # Console output
+            console.print("\n[bold]Test Coverage Report[/bold]")
+            console.print("=" * 60)
+            console.print(f"Project: {analysis.project_root}")
+            console.print(f"Scripts analyzed: {len(analysis.deploy_scripts)}")
+            console.print()
+
+            # Summary table
+            table = Table(title="Coverage Summary")
+            table.add_column("Metric", style="cyan")
+            table.add_column("Count", style="magenta", justify="right")
+
+            table.add_row("Scripts with tests", str(analysis.scripts_with_tests))
+            table.add_row("Scripts without tests", str(analysis.scripts_without_tests))
+            table.add_row("Scripts with fork tests", str(analysis.scripts_with_fork_tests))
+
+            console.print(table)
+            console.print()
+
+            # Script details
+            if analysis.coverage:
+                console.print("[bold]Script Coverage Details[/bold]")
+                console.print("-" * 60)
+
+                for script, cov in analysis.coverage.items():
+                    script_name = script.relative_to(analysis.project_root)
+                    if cov.has_any_test:
+                        status = "[green]✓[/green]"
+                    else:
+                        status = "[red]✗[/red]"
+
+                    console.print(f"{status} {script_name}")
+
+                    if cov.test_files:
+                        for test_file in cov.test_files:
+                            test_name = test_file.relative_to(analysis.project_root)
+                            fork_badge = " [cyan](fork)[/cyan]" if test_file in cov.fork_tests else ""
+                            run_badge = " [yellow](calls run())[/yellow]" if cov.test_calls_run else ""
+                            console.print(f"    └─ {test_name}{fork_badge}{run_badge}")
+                    else:
+                        console.print("    [dim]No tests found[/dim]")
+                    console.print()
+
+            # Final status
+            if analysis.scripts_without_tests > 0:
+                console.print(
+                    f"[yellow]Warning:[/yellow] {analysis.scripts_without_tests} script(s) have no test coverage"
+                )
+                sys.exit(1)
+            else:
+                console.print("[green]✓ All scripts have test coverage[/green]")
+                sys.exit(0)
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        if "--debug" in sys.argv:
+            raise
+        sys.exit(1)
+
+
+@cli.command()
+@click.option(
+    "--category",
+    type=click.Choice(["proxy", "security", "testing", "config", "dynamic", "all"]),
+    default="all",
+    help="Filter by category",
+)
+@click.option(
+    "--severity",
+    type=click.Choice(["critical", "high", "medium", "low", "info", "all"]),
+    default="all",
+    help="Filter by severity",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=click.Choice(["console", "json"]),
+    default="console",
+    help="Output format",
+)
+def rules(category: str, severity: str, output: str) -> None:
+    """List all available rules.
+
+    Examples:
+        deployguard rules
+        deployguard rules --category proxy
+        deployguard rules --severity critical
+        deployguard rules -o json
+    """
+    from deployguard.rules import list_all_rules
+    from deployguard.models.rules import RuleCategory, Severity
+
+    try:
+        all_rules = list_all_rules()
+
+        # Filter by category
+        if category != "all":
+            category_enum = RuleCategory(category)
+            all_rules = {
+                k: v for k, v in all_rules.items() if v.rule.category == category_enum
+            }
+
+        # Filter by severity
+        if severity != "all":
+            severity_enum = Severity(severity)
+            all_rules = {
+                k: v for k, v in all_rules.items() if v.rule.severity == severity_enum
+            }
+
+        if output == "json":
+            # JSON output
+            result = {
+                "total_rules": len(all_rules),
+                "rules": [
+                    {
+                        "id": rule_instance.rule.rule_id,
+                        "name": rule_instance.rule.name,
+                        "description": rule_instance.rule.description,
+                        "severity": rule_instance.rule.severity.value,
+                        "category": rule_instance.rule.category.value,
+                        "references": rule_instance.rule.references,
+                        "hack_references": rule_instance.rule.hack_references,
+                        "real_world_context": rule_instance.rule.real_world_context,
+                        "remediation": rule_instance.rule.remediation,
+                    }
+                    for rule_instance in all_rules.values()
+                ],
+            }
+            console.print_json(data=result)
+        else:
+            # Console output
+            console.print("\n[bold]Available Rules[/bold]")
+            console.print("=" * 80)
+            console.print(f"Total: {len(all_rules)} rules")
+            console.print()
+
+            # Group by category
+            from collections import defaultdict
+
+            by_category: dict[str, list] = defaultdict(list)
+            for rule_instance in all_rules.values():
+                by_category[rule_instance.rule.category.value].append(rule_instance)
+
+            for cat_name, cat_rules in sorted(by_category.items()):
+                console.print(f"\n[bold cyan]{cat_name.upper()}[/bold cyan]")
+                console.print("-" * 40)
+
+                for rule_instance in sorted(cat_rules, key=lambda r: r.rule.rule_id):
+                    rule = rule_instance.rule
+                    severity_color = {
+                        "critical": "red",
+                        "high": "orange1",
+                        "medium": "yellow",
+                        "low": "blue",
+                        "info": "cyan",
+                    }.get(rule.severity.value, "white")
+
+                    console.print(
+                        f"[bold]{rule.rule_id}[/bold] "
+                        f"[{severity_color}][{rule.severity.value.upper()}][/{severity_color}]"
+                    )
+                    console.print(f"  {rule.name}")
+                    console.print(f"  [dim]{rule.description}[/dim]")
+                    console.print()
+
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {e}")
+        if "--debug" in sys.argv:
+            raise
+        sys.exit(1)
 
 
 def main() -> None:

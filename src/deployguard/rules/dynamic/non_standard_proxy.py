@@ -1,11 +1,11 @@
-"""DG-105: Non-Standard Proxy Pattern rule."""
+"""NON_STANDARD_PROXY: Non-Standard Proxy Pattern rule."""
 
 from deployguard.models.dynamic import ProxyStandard, ProxyState
 from deployguard.models.rules import Rule, RuleCategory, RuleViolation, Severity
 from deployguard.rules.base import DynamicRule
 
-RULE_DG_105 = Rule(
-    rule_id="DG-105",
+RULE_NON_STANDARD_PROXY = Rule(
+    rule_id="NON_STANDARD_PROXY",
     name="Non-Standard Proxy Pattern",
     description="Proxy uses non-EIP-1967 storage slots.",
     severity=Severity.INFO,
@@ -26,7 +26,7 @@ RULE_DG_105 = Rule(
 
 
 class NonStandardProxyRule(DynamicRule):
-    """DG-105: Check for non-standard proxy patterns.
+    """NON_STANDARD_PROXY: Check for non-standard proxy patterns.
 
     Detects proxies that don't use standard EIP-1967 storage slots,
     which may indicate custom implementations or different proxy standards.
@@ -73,7 +73,7 @@ class NonStandardProxyRule(DynamicRule):
 
 
 # Instantiate rule for registration
-rule_dg105 = NonStandardProxyRule(RULE_DG_105)
+rule_non_standard_proxy = NonStandardProxyRule(RULE_NON_STANDARD_PROXY)
 
 
 # Backward compatibility function (deprecated)
@@ -91,5 +91,5 @@ def check_non_standard_proxy(proxy_state: ProxyState) -> RuleViolation | None:
     """
     import asyncio
 
-    violations = asyncio.run(rule_dg105.check(proxy_state, "", None))
+    violations = asyncio.run(rule_non_standard_proxy.check(proxy_state, "", None))
     return violations[0] if violations else None

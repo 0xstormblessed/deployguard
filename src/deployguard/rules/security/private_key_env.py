@@ -1,4 +1,4 @@
-"""DG-005: Private Key in Environment Variable.
+"""PRIVATE_KEY_ENV: Private Key in Environment Variable.
 
 Detects when deployment scripts load private keys from .env files,
 which is a security risk.
@@ -108,17 +108,26 @@ class PrivateKeyEnvRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_005 = Rule(
-    rule_id="DG-005",
+RULE_PRIVATE_KEY_ENV = Rule(
+    rule_id="PRIVATE_KEY_ENV",
     name="Private Key in Environment Variable",
     description="Script loads private key from .env file, risking exposure",
     severity=Severity.HIGH,
     category=RuleCategory.SECURITY,
     references=[
-        "https://book.getfoundry.sh/tutorials/best-practices#private-keys",
-        "https://book.getfoundry.sh/reference/forge/forge-script#wallet-options---raw",
+        "https://getfoundry.sh/guides/best-practices/key-management",
+        "https://github.com/smartcontractkit/full-blockchain-solidity-course-js/discussions/5",
     ],
+    hack_references=[
+        "https://rekt.news/okx-dex-rekt",
+    ],
+    real_world_context=(
+        "Private keys stored in .env files have been accidentally committed to public repositories countless times. "
+        "In 2023, GitHub rotated keys after a vulnerability exposed credentials in environment files. "
+        "Attackers actively scan GitHub for committed .env files and immediately drain any funds found. "
+        "Even if not committed, .env files can be exposed through log files, CI/CD artifacts, or compromised systems."
+    ),
     remediation="Use hardware wallet (--ledger) or keystore file instead of .env for private keys",
 )
 
-rule_dg005 = PrivateKeyEnvRule(RULE_DG_005)
+rule_private_key_env = PrivateKeyEnvRule(RULE_PRIVATE_KEY_ENV)

@@ -38,7 +38,9 @@ class Rule:
         description: What the rule checks
         severity: Default severity level
         category: Rule category
-        references: Links to documentation
+        references: Links to documentation (OpenZeppelin docs, EIPs, blog posts)
+        hack_references: Links to specific exploits, Rekt reports, incident analyses
+        real_world_context: 2-4 sentence explanation of actual attacks that occurred
         remediation: How to fix the issue
     """
 
@@ -48,6 +50,8 @@ class Rule:
     severity: Severity
     category: RuleCategory
     references: list[str] = field(default_factory=list)
+    hack_references: list[str] = field(default_factory=list)
+    real_world_context: str = ""
     remediation: str = ""
 
     def __post_init__(self) -> None:

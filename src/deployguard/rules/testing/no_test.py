@@ -1,4 +1,4 @@
-"""DG-012: Deployment Script Has No Test.
+"""NO_TEST: Deployment Script Has No Test.
 
 Detects deployment scripts that don't have corresponding test files,
 which means the deployment hasn't been tested.
@@ -127,8 +127,8 @@ class NoTestRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_012 = Rule(
-    rule_id="DG-012",
+RULE_NO_TEST = Rule(
+    rule_id="NO_TEST",
     name="Deployment Script Has No Test",
     description="No test file found for deployment script",
     severity=Severity.HIGH,
@@ -140,4 +140,4 @@ RULE_DG_012 = Rule(
     remediation="Create a test file that imports and executes the deployment",
 )
 
-rule_dg012 = NoTestRule(RULE_DG_012)
+rule_no_test = NoTestRule(RULE_NO_TEST)

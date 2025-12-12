@@ -31,6 +31,9 @@ class Finding:
         location: Source location (if applicable)
         on_chain_evidence: On-chain evidence (if applicable)
         recommendation: How to fix the issue
+        references: Links to documentation
+        hack_references: Links to exploits and incident reports
+        real_world_context: Explanation of why this matters with real examples
         timestamp: When finding was created
         tool_version: Version of tool that created finding
     """
@@ -43,6 +46,9 @@ class Finding:
     location: SourceLocation | None = None
     on_chain_evidence: dict | None = None
     recommendation: str = ""
+    references: list[str] = field(default_factory=list)
+    hack_references: list[str] = field(default_factory=list)
+    real_world_context: str = ""
     timestamp: datetime = field(default_factory=datetime.now)
     tool_version: str = field(default=__version__)
 

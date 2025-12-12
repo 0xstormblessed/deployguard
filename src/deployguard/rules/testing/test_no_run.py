@@ -1,4 +1,4 @@
-"""DG-014: Test Doesn't Execute Deployment.
+"""TEST_NO_RUN: Test Doesn't Execute Deployment.
 
 Detects test files that import the deployment script but don't actually
 call run() to execute the deployment.
@@ -145,8 +145,8 @@ class TestNoRunRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_014 = Rule(
-    rule_id="DG-014",
+RULE_TEST_NO_RUN = Rule(
+    rule_id="TEST_NO_RUN",
     name="Test Doesn't Execute Deployment",
     description="Test imports deployment script but doesn't call run()",
     severity=Severity.MEDIUM,
@@ -157,4 +157,4 @@ RULE_DG_014 = Rule(
     remediation="Ensure test calls deployer.run() to execute deployment",
 )
 
-rule_dg014 = TestNoRunRule(RULE_DG_014)
+rule_test_no_run = TestNoRunRule(RULE_TEST_NO_RUN)

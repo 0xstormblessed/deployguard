@@ -1,4 +1,4 @@
-"""DG-004: Missing Implementation Validation.
+"""MISSING_IMPL_VALIDATION: Missing Implementation Validation.
 
 Detects when implementation addresses are used without validating that
 they contain actual contract bytecode.
@@ -115,16 +115,16 @@ class MissingValidationRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_004 = Rule(
-    rule_id="DG-004",
+RULE_MISSING_IMPL_VALIDATION = Rule(
+    rule_id="MISSING_IMPL_VALIDATION",
     name="Missing Implementation Validation",
     description="Implementation address used without validation",
     severity=Severity.LOW,
     category=RuleCategory.PROXY,
     references=[
-        "https://docs.soliditylang.org/en/latest/units-and-global-variables.html#address-related",
+        "https://rareskills.io/post/solidity-code-length",
     ],
     remediation="Add require(impl.code.length > 0) before proxy deployment",
 )
 
-rule_dg004 = MissingValidationRule(RULE_DG_004)
+rule_missing_impl_validation = MissingValidationRule(RULE_MISSING_IMPL_VALIDATION)

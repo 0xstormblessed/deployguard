@@ -1,4 +1,4 @@
-"""DG-006: Missing Ownership Transfer.
+"""MISSING_OWNERSHIP_TRANSFER: Missing Ownership Transfer.
 
 Detects when Ownable contracts are deployed but ownership is not transferred
 to a secure admin address (multisig, timelock, or DAO).
@@ -112,17 +112,16 @@ class MissingOwnershipTransferRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_006 = Rule(
-    rule_id="DG-006",
+RULE_MISSING_OWNERSHIP_TRANSFER = Rule(
+    rule_id="MISSING_OWNERSHIP_TRANSFER",
     name="Missing Ownership Transfer",
-    description="Deployed contract ownership not transferred to admin/multisig",
+    description="Deployed contract ownership not transferred to an admin/multisig",
     severity=Severity.HIGH,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/contracts/access-control",
-        "https://blog.openzeppelin.com/smart-contract-security-guidelines-4-strategies-for-safer-smart-contracts/",
+        "https://frameworks.securityalliance.org/multisig-for-protocols/overview",
     ],
-    remediation="Add transferOwnership() call to transfer ownership to admin/multisig",
+    remediation="Add transferOwnership() call to transfer ownership to a multisig",
 )
 
-rule_dg006 = MissingOwnershipTransferRule(RULE_DG_006)
+rule_missing_ownership_transfer = MissingOwnershipTransferRule(RULE_MISSING_OWNERSHIP_TRANSFER)

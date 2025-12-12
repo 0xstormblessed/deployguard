@@ -1,4 +1,4 @@
-"""DG-020: Hardcoded Address Without Environment Variable.
+"""HARDCODED_ADDRESS: Hardcoded Address Without Environment Variable.
 
 Detects hardcoded Ethereum addresses that should be configurable via
 environment variables or configuration files.
@@ -118,8 +118,8 @@ class HardcodedAddressRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_020 = Rule(
-    rule_id="DG-020",
+RULE_HARDCODED_ADDRESS = Rule(
+    rule_id="HARDCODED_ADDRESS",
     name="Hardcoded Address Without Environment",
     description="Address is hardcoded instead of using environment variable",
     severity=Severity.MEDIUM,
@@ -127,8 +127,9 @@ RULE_DG_020 = Rule(
     references=[
         "https://book.getfoundry.sh/cheatcodes/env-address",
         "https://book.getfoundry.sh/tutorials/best-practices#use-environment-variables",
+        "https://getfoundry.sh/guides/scripting-with-config",
     ],
-    remediation="Use vm.envAddress() or environment variables for addresses",
+    remediation="Prefer loading addresses from configuration files, use vm.envAddress() or environment variables for addresses",
 )
 
-rule_dg020 = HardcodedAddressRule(RULE_DG_020)
+rule_hardcoded_address = HardcodedAddressRule(RULE_HARDCODED_ADDRESS)

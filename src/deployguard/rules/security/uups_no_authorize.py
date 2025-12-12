@@ -1,4 +1,4 @@
-"""DG-008: UUPS Proxy Missing _authorizeUpgrade Override.
+"""UUPS_NO_AUTHORIZE: UUPS Proxy Missing _authorizeUpgrade Override.
 
 Detects UUPS proxies where the implementation contract does not properly
 override _authorizeUpgrade() with access control checks.
@@ -100,17 +100,22 @@ class UUPSMissingAuthorizeUpgradeRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_008 = Rule(
-    rule_id="DG-008",
+RULE_UUPS_NO_AUTHORIZE = Rule(
+    rule_id="UUPS_NO_AUTHORIZE",
     name="UUPS Proxy Missing _authorizeUpgrade Override",
     description="UUPS proxy implementation must override _authorizeUpgrade for access control",
     severity=Severity.CRITICAL,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable",
-        "https://forum.openzeppelin.com/t/uups-proxies-tutorial-solidity-javascript/7786",
+        "https://docs.openzeppelin.com/contracts/4.x/api/proxy#UUPSUpgradeable-_authorizeUpgrade-address-",
     ],
+    hack_references=[],
+    real_world_context=(
+        "UUPS proxies require the implementation to override _authorizeUpgrade() with access control. "
+        "Without this, anyone can call upgradeTo() and replace the implementation with malicious code. "
+        "This function must include authorization logic (e.g., onlyOwner) to restrict who can upgrade."
+    ),
     remediation="Override _authorizeUpgrade() in implementation contract with access control checks",
 )
 
-rule_dg008 = UUPSMissingAuthorizeUpgradeRule(RULE_DG_008)
+rule_uups_no_authorize = UUPSMissingAuthorizeUpgradeRule(RULE_UUPS_NO_AUTHORIZE)

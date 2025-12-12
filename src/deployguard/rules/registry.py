@@ -173,7 +173,7 @@ def static_rule(rule_id: str, **kwargs: dict) -> Callable:
 
     Usage:
         @static_rule(
-            rule_id="DG-001",
+            rule_id="NON_ATOMIC_INIT",
             name="Non-Atomic Init",
             description="...",
             severity=Severity.CRITICAL,
@@ -206,7 +206,7 @@ def dynamic_rule(rule_id: str, **kwargs: dict) -> Callable:
 
     Usage:
         @dynamic_rule(
-            rule_id="DG-101",
+            rule_id="IMPL_MISMATCH",
             name="Implementation Mismatch",
             description="...",
             severity=Severity.CRITICAL,

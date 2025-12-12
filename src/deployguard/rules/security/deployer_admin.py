@@ -1,4 +1,4 @@
-"""DG-007: Deployer Retains Admin Privileges.
+"""DEPLOYER_ADMIN: Deployer Retains Admin Privileges.
 
 Detects when msg.sender (deployer EOA) is explicitly set as the admin
 instead of using a secure admin address.
@@ -97,16 +97,16 @@ class DeployerAsAdminRule(StaticRule):
 
 
 # Create rule instance
-RULE_DG_007 = Rule(
-    rule_id="DG-007",
+RULE_DEPLOYER_ADMIN = Rule(
+    rule_id="DEPLOYER_ADMIN",
     name="Deployer Retains Admin Privileges",
     description="Admin/owner is set to msg.sender (deployer) instead of secure address",
     severity=Severity.MEDIUM,
     category=RuleCategory.SECURITY,
     references=[
-        "https://docs.openzeppelin.com/contracts/access-control#ownership-and-ownable",
+        "https://frameworks.securityalliance.org/multisig-for-protocols/overview",
     ],
     remediation="Set admin to a multisig or governance contract address, not msg.sender",
 )
 
-rule_dg007 = DeployerAsAdminRule(RULE_DG_007)
+rule_deployer_admin = DeployerAsAdminRule(RULE_DEPLOYER_ADMIN)

@@ -73,7 +73,7 @@ async def test_full_proxy_verification_no_issues() -> None:
 
 @pytest.mark.asyncio
 async def test_full_proxy_verification_implementation_mismatch() -> None:
-    """Test end-to-end proxy verification with implementation mismatch (DG-101)."""
+    """Test end-to-end proxy verification with implementation mismatch (IMPL_MISMATCH)."""
     mock_rpc = AsyncMock()
 
     proxy_addr = Address("0x1234567890123456789012345678901234567890")
@@ -106,14 +106,14 @@ async def test_full_proxy_verification_implementation_mismatch() -> None:
             "https://eth-mainnet.g.alchemy.com/v2/test",
         )
 
-    # Should have DG-101 violation
+    # Should have IMPL_MISMATCH violation
     assert report.summary.total_findings >= 1
     assert report.summary.critical_count >= 1
     assert report.exit_code == 1
     assert report.summary.passed is False
 
-    # Find DG-101 finding
-    dg101_findings = [f for f in report.findings if f.rule_id == "DG-101"]
+    # Find IMPL_MISMATCH finding
+    dg101_findings = [f for f in report.findings if f.rule_id == "IMPL_MISMATCH"]
     assert len(dg101_findings) == 1
     finding = dg101_findings[0]
     assert finding.severity.value == "critical"
@@ -123,7 +123,7 @@ async def test_full_proxy_verification_implementation_mismatch() -> None:
 
 @pytest.mark.asyncio
 async def test_full_proxy_verification_uninitialized() -> None:
-    """Test end-to-end proxy verification with uninitialized proxy (DG-103)."""
+    """Test end-to-end proxy verification with uninitialized proxy (UNINITIALIZED_PROXY)."""
     mock_rpc = AsyncMock()
 
     proxy_addr = Address("0x1234567890123456789012345678901234567890")
@@ -154,13 +154,13 @@ async def test_full_proxy_verification_uninitialized() -> None:
             "https://eth-mainnet.g.alchemy.com/v2/test",
         )
 
-    # Should have DG-103 violation
+    # Should have UNINITIALIZED_PROXY violation
     assert report.summary.total_findings >= 1
     assert report.summary.high_count >= 1
     assert report.exit_code == 1
 
-    # Find DG-103 finding
-    dg103_findings = [f for f in report.findings if f.rule_id == "DG-103"]
+    # Find UNINITIALIZED_PROXY finding
+    dg103_findings = [f for f in report.findings if f.rule_id == "UNINITIALIZED_PROXY"]
     assert len(dg103_findings) == 1
     finding = dg103_findings[0]
     assert finding.severity.value == "high"
@@ -169,7 +169,7 @@ async def test_full_proxy_verification_uninitialized() -> None:
 
 @pytest.mark.asyncio
 async def test_full_proxy_verification_shadow_contract() -> None:
-    """Test end-to-end proxy verification with shadow contract (DG-102)."""
+    """Test end-to-end proxy verification with shadow contract (SHADOW_CONTRACT)."""
     mock_rpc = AsyncMock()
 
     proxy_addr = Address("0x1234567890123456789012345678901234567890")
@@ -202,13 +202,13 @@ async def test_full_proxy_verification_shadow_contract() -> None:
             "https://eth-mainnet.g.alchemy.com/v2/test",
         )
 
-    # Should have DG-102 violation
+    # Should have SHADOW_CONTRACT violation
     assert report.summary.total_findings >= 1
     assert report.summary.high_count >= 1
     assert report.exit_code == 1
 
-    # Find DG-102 finding
-    dg102_findings = [f for f in report.findings if f.rule_id == "DG-102"]
+    # Find SHADOW_CONTRACT finding
+    dg102_findings = [f for f in report.findings if f.rule_id == "SHADOW_CONTRACT"]
     assert len(dg102_findings) == 1
     finding = dg102_findings[0]
     assert finding.severity.value == "high"
@@ -217,7 +217,7 @@ async def test_full_proxy_verification_shadow_contract() -> None:
 
 @pytest.mark.asyncio
 async def test_full_proxy_verification_admin_mismatch() -> None:
-    """Test end-to-end proxy verification with admin mismatch (DG-104)."""
+    """Test end-to-end proxy verification with admin mismatch (ADMIN_MISMATCH)."""
     mock_rpc = AsyncMock()
 
     proxy_addr = Address("0x1234567890123456789012345678901234567890")
@@ -263,12 +263,12 @@ async def test_full_proxy_verification_admin_mismatch() -> None:
             expected_admin=expected_admin,
         )
 
-    # Should have DG-104 violation
+    # Should have ADMIN_MISMATCH violation
     assert report.summary.total_findings >= 1
     assert report.summary.medium_count >= 1
 
-    # Find DG-104 finding
-    dg104_findings = [f for f in report.findings if f.rule_id == "DG-104"]
+    # Find ADMIN_MISMATCH finding
+    dg104_findings = [f for f in report.findings if f.rule_id == "ADMIN_MISMATCH"]
     assert len(dg104_findings) == 1
     finding = dg104_findings[0]
     assert finding.severity.value == "medium"
@@ -327,16 +327,16 @@ async def test_full_proxy_verification_multiple_issues() -> None:
 
     # Should have multiple violations
     assert report.summary.total_findings >= 3
-    assert report.summary.critical_count >= 1  # DG-101
-    assert report.summary.high_count >= 1  # DG-102
-    assert report.summary.medium_count >= 1  # DG-104
+    assert report.summary.critical_count >= 1  # IMPL_MISMATCH
+    assert report.summary.high_count >= 1  # SHADOW_CONTRACT
+    assert report.summary.medium_count >= 1  # ADMIN_MISMATCH
     assert report.exit_code == 1
 
     # Verify all expected findings
     rule_ids = {f.rule_id for f in report.findings}
-    assert "DG-101" in rule_ids  # Implementation mismatch
-    assert "DG-102" in rule_ids  # Shadow contract
-    assert "DG-104" in rule_ids  # Admin mismatch
+    assert "IMPL_MISMATCH" in rule_ids  # Implementation mismatch
+    assert "SHADOW_CONTRACT" in rule_ids  # Shadow contract
+    assert "ADMIN_MISMATCH" in rule_ids  # Admin mismatch
 
 
 @pytest.mark.asyncio

@@ -4,11 +4,11 @@ This module provides the rule engine for static and dynamic analysis of
 deployment scripts. Rules are automatically registered when imported.
 
 Available rule categories:
-- Proxy rules (DG-001 to DG-004): CPIMP detection
-- Security rules (DG-005 to DG-011): Private keys, access control, UUPS
-- Testing rules (DG-012 to DG-014): Test coverage verification
-- Config rules (DG-020): Configuration best practices
-- Dynamic rules (DG-101 to DG-105): On-chain verification
+- Proxy rules: NON_ATOMIC_INIT, HARDCODED_IMPL, MISSING_IMPL_VALIDATION
+- Security rules: PRIVATE_KEY_ENV, MISSING_OWNERSHIP_TRANSFER, DEPLOYER_ADMIN, UUPS_*
+- Testing rules: NO_TEST, NO_FORK_TEST, TEST_NO_RUN
+- Config rules: HARDCODED_ADDRESS
+- Dynamic rules: IMPL_MISMATCH, SHADOW_CONTRACT, UNINITIALIZED_PROXY, ADMIN_MISMATCH, NON_STANDARD_PROXY
 """
 
 # Import base classes and registry
@@ -60,7 +60,7 @@ def get_rule_by_id(rule_id: str):
     """Get a specific rule by ID.
 
     Args:
-        rule_id: Rule identifier (e.g., "DG-001")
+        rule_id: Rule identifier (e.g., "NON_ATOMIC_INIT", "IMPL_MISMATCH")
 
     Returns:
         Rule instance if found, None otherwise
