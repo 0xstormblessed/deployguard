@@ -21,7 +21,7 @@ class NonAtomicInitRule(StaticRule):
     1. The initialization data parameter is empty ("", "0x", or bytes(""))
     2. Deployment and initialization occur in separate transaction boundaries
 
-    The CPIMP (Clandestine Proxy Initialization Mempool Probe) attack occurs when:
+    The CPIMP (Clandestine Proxy In the Middle of Proxy) attack occurs when:
     1. Proxy is deployed without atomic initialization
     2. Attacker monitors mempool for proxy deployment
     3. Attacker front-runs the initialization transaction
@@ -171,7 +171,7 @@ RULE_NON_ATOMIC_INIT = Rule(
         "https://rekt.news/uspd-rekt/",
     ],
     real_world_context=(
-        "This is the CPIMP (Clandestine Proxy Initialization Mempool Probe) vulnerability. "
+        "This is vulnerable to a CPIMP (Clandestine Proxy In the Middle of Proxy) attack. "
         "Attackers monitor mempools for proxy deployments with empty init data, then front-run "
         "the initialization transaction to gain admin control. Dedaub identified CPIMP as affecting "
         "thousands of contracts across multiple chains, making it one of the most far-reaching "

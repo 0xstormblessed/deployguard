@@ -61,7 +61,13 @@ def _print_single_file_findings(file_path: Path, findings: list) -> None:
             f"[bold]{finding.rule_id}: {finding.title}[/bold]"
         )
         if finding.location:
-            console.print(f"  Location: line {finding.location.line_number}")
+            loc = finding.location
+            file_display = ""
+            if loc.file_path and Path(loc.file_path).name != file_path.name:
+                file_display = f" in {Path(loc.file_path).name}"
+            console.print(f"  Location: line {loc.line_number}{file_display}")
+            if loc.line_content:
+                console.print(f"  [dim]→ {loc.line_content}[/dim]")
         console.print(f"  {finding.description}")
 
         # Print hack references and real-world context
@@ -107,7 +113,22 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
                 )
 
                 if finding.location:
-                    console.print(f"  Location: line {finding.location.line_number}")
+                    # Show file path if it differs from the main file (e.g., inherited contracts)
+                    loc = finding.location
+                    file_display = ""
+                    if loc.file_path:
+                        try:
+                            loc_file = Path(loc.file_path)
+                            result_file = result.file_path
+                            # Show file path if different from main file
+                            if loc_file.name != result_file.name:
+                                file_display = f" in {loc_file.name}"
+                        except Exception:
+                            pass
+                    console.print(f"  Location: line {loc.line_number}{file_display}")
+                    # Show line content snippet if available
+                    if loc.line_content:
+                        console.print(f"  [dim]→ {loc.line_content}[/dim]")
 
                 console.print(f"  Description: {finding.description}")
 

@@ -68,6 +68,7 @@ class FoundryScriptParser:
     def __init__(self) -> None:
         """Initialize the solc-based parser."""
         self.current_file: Path | None = None
+        self.current_source_file: Path | None = None  # Tracks current file being analyzed (for inherited contracts)
         self.source_code: str = ""
         self.source_lines: list[str] = []
 
@@ -234,14 +235,19 @@ class FoundryScriptParser:
                     if "ast" in source_info:
                         ast = source_info["ast"]
                         # Switch source context for proper source snippet extraction
+                        # Use absolutePath from AST if available, otherwise use the key
+                        actual_path = ast.get("absolutePath", source_path)
                         if source_path in source_code_map:
                             self.source_code = source_code_map[source_path]
                             self.source_lines = self.source_code.split("\n")
+                            # Track current source file for accurate location reporting
+                            self.current_source_file = Path(actual_path)
                         self._analyze_ast(ast, analysis)
 
                 # Restore original source context
                 self.source_code = source
                 self.source_lines = source.split("\n")
+                self.current_source_file = self.current_file
 
             # Post-process to calculate transaction scope boundaries
             self._calculate_scope_boundaries(analysis)
@@ -754,7 +760,9 @@ class FoundryScriptParser:
             return None
 
         # Extract implementation and init data from bytecode expression
-        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(bytecode_arg)
+        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(
+            bytecode_arg, proxy_type
+        )
 
         has_empty_init = self._is_empty_init_data(init_data_arg)
 
@@ -788,7 +796,9 @@ class FoundryScriptParser:
                 return proxy_type
         return None
 
-    def _extract_proxy_args_from_bytecode(self, bytecode_expr: str) -> tuple[str, str]:
+    def _extract_proxy_args_from_bytecode(
+        self, bytecode_expr: str, proxy_type: ProxyType | None = None
+    ) -> tuple[str, str]:
         """Extract implementation and init data from bytecode expression.
 
         Parses patterns like:
@@ -797,8 +807,12 @@ class FoundryScriptParser:
                 abi.encode(impl, initData)
             )
 
+        For TransparentUpgradeableProxy (3 args: impl, admin, data):
+            abi.encode(impl, admin, data)
+
         Args:
             bytecode_expr: Source code of bytecode expression
+            proxy_type: Type of proxy to help determine argument positions
 
         Returns:
             Tuple of (implementation_arg, init_data_arg)
@@ -806,18 +820,27 @@ class FoundryScriptParser:
         impl_arg = ""
         init_data_arg = ""
 
-        # Look for abi.encode(impl, initData) pattern
-        # Handle nested parens like bytes("") using a non-greedy match
-        encode_match = re.search(
-            r"abi\.encode\s*\(\s*"  # abi.encode(
-            r"([^,]+?)\s*,\s*"      # first arg (impl)
-            r"([^)]+\([^)]*\)[^)]*|[^)]+)"  # second arg (init data) - handles nested () or simple
-            r"\s*\)",               # closing paren
-            bytecode_expr,
-        )
-        if encode_match:
-            impl_arg = encode_match.group(1).strip()
-            init_data_arg = encode_match.group(2).strip()
+        # Extract all arguments from abi.encode(...) using balanced paren matching
+        # Find the start of abi.encode(
+        encode_start = bytecode_expr.find("abi.encode(")
+        if encode_start != -1:
+            # Find matching closing paren
+            start_idx = encode_start + len("abi.encode(")
+            args_str = self._extract_balanced_parens(bytecode_expr[start_idx:])
+            # Split by comma but handle nested parens like bytes("")
+            args = self._split_args(args_str) if args_str else []
+        else:
+            args = []
+
+        if len(args) >= 2:
+            impl_arg = args[0].strip()
+            # For TransparentUpgradeableProxy: args are (impl, admin, data)
+            # For ERC1967Proxy/BeaconProxy: args are (impl, data)
+            if proxy_type == ProxyType.TRANSPARENT_UPGRADEABLE_PROXY and len(args) >= 3:
+                init_data_arg = args[2].strip()
+            else:
+                init_data_arg = args[-1].strip()  # Last arg is always init data
+
             # Remove trailing comments that may have been captured
             if "//" in init_data_arg:
                 init_data_arg = init_data_arg.split("//")[0].strip()
@@ -831,6 +854,68 @@ class FoundryScriptParser:
                 init_data_arg = encode_call_match.group(0)
 
         return impl_arg, init_data_arg
+
+    def _split_args(self, args_str: str) -> list[str]:
+        """Split arguments by comma, handling nested parentheses.
+
+        Args:
+            args_str: Comma-separated arguments string
+
+        Returns:
+            List of individual arguments
+        """
+        args = []
+        current_arg = ""
+        paren_depth = 0
+
+        for char in args_str:
+            if char == "(":
+                paren_depth += 1
+                current_arg += char
+            elif char == ")":
+                paren_depth -= 1
+                current_arg += char
+            elif char == "," and paren_depth == 0:
+                args.append(current_arg.strip())
+                current_arg = ""
+            else:
+                current_arg += char
+
+        if current_arg.strip():
+            args.append(current_arg.strip())
+
+        return args
+
+    def _extract_balanced_parens(self, s: str) -> str:
+        """Extract content within balanced parentheses.
+
+        Given a string starting after an opening paren, extract everything
+        up to the matching closing paren.
+
+        Args:
+            s: String starting after the opening paren
+
+        Returns:
+            Content between balanced parens (excluding the final closing paren)
+        """
+        result = ""
+        paren_depth = 1  # We're already inside the first paren
+
+        for char in s:
+            if char == "(":
+                paren_depth += 1
+                result += char
+            elif char == ")":
+                paren_depth -= 1
+                if paren_depth == 0:
+                    # Found matching closing paren
+                    return result
+                result += char
+            else:
+                result += char
+
+        # No matching closing paren found
+        return result
 
     def _parse_proxy_deployment(
         self,
@@ -945,9 +1030,12 @@ class FoundryScriptParser:
         Returns:
             SourceLocation with line/column info
         """
+        # Use current_source_file for inherited contracts, fallback to current_file
+        source_file = self.current_source_file or self.current_file
+
         if "src" not in node:
             return SourceLocation(
-                file_path=str(self.current_file) if self.current_file else "",
+                file_path=str(source_file) if source_file else "",
                 line_number=0,
             )
 
@@ -958,13 +1046,13 @@ class FoundryScriptParser:
         # Calculate line number
         line_number = self.source_code[:start].count("\n") + 1
 
-        # Get line content
-        line_content = (
-            self.source_lines[line_number - 1] if line_number <= len(self.source_lines) else ""
-        )
+        # Get line content (strip leading/trailing whitespace for display)
+        line_content = ""
+        if line_number <= len(self.source_lines):
+            line_content = self.source_lines[line_number - 1].strip()
 
         return SourceLocation(
-            file_path=str(self.current_file) if self.current_file else "",
+            file_path=str(source_file) if source_file else "",
             line_number=line_number,
             line_content=line_content,
         )
