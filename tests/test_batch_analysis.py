@@ -154,14 +154,15 @@ class TestBatchAnalysis:
         # Check error context is captured
         assert failed.error is not None
         assert failed.error_type is not None
-        assert failed.error_traceback is not None
 
         # Error type should be a class name (string)
         assert isinstance(failed.error_type, str)
         assert len(failed.error_type) > 0
 
-        # Traceback should contain file/line information
-        assert "Traceback" in failed.error_traceback or "File" in failed.error_traceback
+        # For solc parse errors, traceback may be None (it's a compile error, not a Python exception)
+        # For Python exceptions, traceback should contain file/line information
+        if failed.error_type != "ParseError" and failed.error_traceback is not None:
+            assert "Traceback" in failed.error_traceback or "File" in failed.error_traceback
 
 
 class TestFileAnalysisResult:

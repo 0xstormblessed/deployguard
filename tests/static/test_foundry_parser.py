@@ -1,5 +1,7 @@
 """Tests for the Foundry script parser."""
 
+from pathlib import Path
+
 import pytest
 
 from deployguard.models.static import (
@@ -518,3 +520,123 @@ contract VulnerableNativeCreate2 {
         assert deployment.proxy_type == ProxyType.ERC1967_PROXY
         assert deployment.deployment_method == DeploymentMethod.NEW_CREATE2
         assert deployment.has_empty_init is True
+
+    @pytest.mark.slow
+    def test_parse_createx_in_helper_function_with_assignment(
+        self, parser: FoundryScriptParser
+    ) -> None:
+        """Test parsing CreateX in helper function with assignment (USPD pattern).
+
+        This tests the specific pattern from USPD's deployUUPSProxy_NoInit where:
+        1. The function returns a value via assignment to return variable
+        2. The CreateX call is in an Assignment expression, not VariableDeclaration
+        """
+        source = '''
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface ICreateX {
+    function deployCreate2(bytes32 salt, bytes memory bytecode) external payable returns (address);
+}
+
+contract ERC1967Proxy {
+    constructor(address impl, bytes memory data) {}
+}
+
+contract DeployScript {
+    ICreateX public createX;
+
+    function deployUUPSProxy_NoInit(bytes32 salt, address implementationAddress) internal returns (address proxyAddress) {
+        bytes memory bytecode = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(implementationAddress, bytes("")) // Empty init data for UUPS
+        );
+        proxyAddress = createX.deployCreate2{value: 0}(salt, bytecode);
+    }
+}
+'''
+        result = parser.parse_source(source, "DeployScript.s.sol")
+
+        # Should detect the CreateX proxy deployment in helper function
+        assert len(result.proxy_deployments) == 1
+        deployment = result.proxy_deployments[0]
+        assert deployment.proxy_type == ProxyType.ERC1967_PROXY
+        assert deployment.deployment_method == DeploymentMethod.CREATEX
+        assert deployment.has_empty_init is True
+        # The bytecode variable should be resolved
+        assert "ERC1967Proxy" in (deployment.bytecode_source or "")
+
+    @pytest.mark.slow
+    def test_parse_createx_inherited_helper_function(
+        self, parser: FoundryScriptParser, tmp_path: Path
+    ) -> None:
+        """Test detection of vulnerable helper function in inherited contract.
+
+        This mimics the real USPD bug where:
+        1. DeployScript.sol defines deployUUPSProxy_NoInit with bytes("")
+        2. 04-DeploySystemCore.s.sol inherits from DeployScript and calls the helper
+        3. The vulnerability is in the INHERITED file, not the main script
+
+        The parser must analyze ALL source files from compilation, not just the main file.
+        """
+        # Create the base contract with vulnerable helper
+        base_contract = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+interface ICreateX {
+    function deployCreate2(bytes32 salt, bytes memory bytecode) external payable returns (address);
+}
+
+contract ERC1967Proxy {
+    constructor(address impl, bytes memory data) {}
+}
+
+contract DeployScript {
+    ICreateX public createX;
+
+    function deployUUPSProxy_NoInit(bytes32 salt, address impl) internal returns (address proxyAddress) {
+        bytes memory bytecode = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(impl, bytes(""))  // VULNERABLE: Empty init data
+        );
+        proxyAddress = createX.deployCreate2{value: 0}(salt, bytecode);
+    }
+}
+'''
+
+        # Create the main script that inherits and calls the helper
+        main_script = '''// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.20;
+
+import "./DeployScript.sol";
+
+contract DeploySystemCore is DeployScript {
+    function run() external {
+        address impl = address(0x1234);
+        bytes32 salt = bytes32(uint256(1));
+        address proxy = deployUUPSProxy_NoInit(salt, impl);  // Calls vulnerable helper
+    }
+}
+'''
+
+        # Write files to tmp directory
+        base_file = tmp_path / "DeployScript.sol"
+        main_file = tmp_path / "DeploySystemCore.s.sol"
+        base_file.write_text(base_contract)
+        main_file.write_text(main_script)
+
+        # Parse the main script - should detect vulnerability in inherited contract
+        result = parser.parse_file(main_file)
+
+        # The vulnerable pattern should be detected from the inherited DeployScript.sol
+        assert len(result.proxy_deployments) >= 1, (
+            f"Expected to find proxy deployment in inherited contract. "
+            f"Parse errors: {result.parse_errors}"
+        )
+
+        # Find the vulnerable deployment
+        vulnerable = [d for d in result.proxy_deployments if d.has_empty_init]
+        assert len(vulnerable) >= 1, (
+            f"Expected to find vulnerable (empty init) deployment. "
+            f"Found deployments: {[(d.proxy_type, d.has_empty_init) for d in result.proxy_deployments]}"
+        )

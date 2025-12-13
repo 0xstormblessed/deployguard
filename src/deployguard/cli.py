@@ -61,7 +61,7 @@ def _print_single_file_findings(file_path: Path, findings: list) -> None:
             f"[bold]{finding.rule_id}: {finding.title}[/bold]"
         )
         if finding.location:
-            console.print(f"  Location: line {finding.location.line}")
+            console.print(f"  Location: line {finding.location.line_number}")
         console.print(f"  {finding.description}")
 
         # Print hack references and real-world context
@@ -81,24 +81,7 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
     console.print("=" * 80)
     console.print()
 
-    # Summary
-    console.print("[bold]SUMMARY[/bold]")
-    console.print("-" * 80)
-    console.print(f"Files scanned: {len(report.files_analyzed)}")
-    console.print(f"Files with findings: {len(report.files_with_findings)}")
-    console.print(
-        f"Total findings: {report.summary.total_findings} "
-        f"({report.summary.critical_count} critical, "
-        f"{report.summary.high_count} high, "
-        f"{report.summary.medium_count} medium, "
-        f"{report.summary.low_count} low, "
-        f"{report.summary.info_count} info)"
-    )
-    status_color = "green" if report.status == "PASSED" else "red"
-    console.print(f"Status: [{status_color}]{report.status}[/{status_color}]")
-    console.print()
-
-    # Files with findings
+    # Files with findings (details first)
     if report.files_with_findings:
         for result in report.results:
             if not result.has_findings:
@@ -124,7 +107,7 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
                 )
 
                 if finding.location:
-                    console.print(f"  Location: line {finding.location.line}")
+                    console.print(f"  Location: line {finding.location.line_number}")
 
                 console.print(f"  Description: {finding.description}")
 
@@ -156,9 +139,22 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
                 console.print(f"  Error: {result.error}")
         console.print()
 
-    # Footer
+    # Summary at the end
     console.print("=" * 80)
-    console.print("[bold]END OF REPORT[/bold]")
+    console.print("[bold]SUMMARY[/bold]")
+    console.print("=" * 80)
+    console.print(f"Files scanned: {len(report.files_analyzed)}")
+    console.print(f"Files with findings: {len(report.files_with_findings)}")
+    console.print(
+        f"Total findings: {report.summary.total_findings} "
+        f"({report.summary.critical_count} critical, "
+        f"{report.summary.high_count} high, "
+        f"{report.summary.medium_count} medium, "
+        f"{report.summary.low_count} low, "
+        f"{report.summary.info_count} info)"
+    )
+    status_color = "green" if report.status == "PASSED" else "red"
+    console.print(f"Status: [{status_color}]{report.status}[/{status_color}]")
     console.print("=" * 80)
 
 
@@ -196,7 +192,7 @@ def _print_batch_report_json(report: BatchAnalysisReport) -> None:
                         "description": f.description,
                         "location": (
                             {
-                                "line": f.location.line,
+                                "line": f.location.line_number,
                                 "column": f.location.column,
                             }
                             if f.location
@@ -289,7 +285,7 @@ def audit(
             findings = [
                 Finding(
                     id=str(uuid.uuid4()),
-                    rule_id=v.rule_id,
+                    rule_id=v.rule.rule_id,
                     title=v.message,
                     description=v.message,
                     severity=v.severity,
