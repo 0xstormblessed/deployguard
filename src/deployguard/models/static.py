@@ -17,6 +17,16 @@ class ProxyType(Enum):
     CUSTOM = "Custom"  # User-defined proxy pattern
 
 
+class DeploymentMethod(Enum):
+    """Method used to deploy a contract."""
+
+    NEW = "new"  # new Contract()
+    NEW_CREATE2 = "new_create2"  # new Contract{salt: ...}()
+    CREATEX = "createx"  # createX.deployCreate2()
+    CREATE2_ASSEMBLY = "create2_assembly"  # assembly { create2(...) }
+    CREATE3 = "create3"  # CREATE3.deploy() or similar
+
+
 class ScriptType(Enum):
     """Types of deployment scripts."""
 
@@ -81,6 +91,9 @@ class ProxyDeployment:
         is_atomic: True if deploy+init in same tx
         tx_boundary_before: vm.broadcast location before deployment
         tx_boundary_after: Next vm.broadcast location after deployment
+        deployment_method: How the proxy was deployed (new, CREATE2, CreateX, etc.)
+        salt: Salt used for CREATE2 deployment (if applicable)
+        bytecode_source: Source expression for bytecode (for CreateX/CREATE2)
     """
 
     proxy_type: ProxyType
@@ -92,6 +105,9 @@ class ProxyDeployment:
     is_atomic: bool = False
     tx_boundary_before: SourceLocation | None = None
     tx_boundary_after: SourceLocation | None = None
+    deployment_method: DeploymentMethod = DeploymentMethod.NEW
+    salt: str | None = None
+    bytecode_source: str | None = None
 
 
 @dataclass

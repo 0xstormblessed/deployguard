@@ -35,12 +35,19 @@ Detects proxy contracts deployed without atomic initialization, which creates a 
 - Proxy deployed with empty initialization data (`""`, `"0x"`, `bytes("")`)
 - Deployment and initialization occur in separate transaction boundaries
 
+**Supported deployment methods:**
+- `new ERC1967Proxy(impl, "")` - Standard Solidity
+- `new ERC1967Proxy{salt: salt}(impl, "")` - Foundry-native CREATE2
+- `createX.deployCreate2(salt, bytecode)` - CreateX factory
+- Arachnid deterministic deployer (`0x4e59b44847b379578588920ca78fbf26c0b4956c`)
+
 **Why it matters:**
 Attackers can monitor the mempool for proxy deployments with empty init data, then front-run the initialization transaction to gain admin control. This is the core CPIMP vulnerability that has affected thousands of contracts.
 
 **References:**
 - [CPIMP Attack - Dedaub Blog](https://dedaub.com/blog/the-cpimp-attack-an-insanely-far-reaching-vulnerability-successfully-mitigated/)
 - [USPD Rekt](https://rekt.news/uspd-rekt/)
+- [Foundry CREATE2 Guide](https://getfoundry.sh/guides/deterministic-deployments-using-create2/)
 
 ---
 
