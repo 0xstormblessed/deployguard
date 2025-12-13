@@ -112,7 +112,10 @@ class NoTestRule(StaticRule):
                             f"    2. Call the run() function\n"
                             f"    3. Verify deployed contracts work correctly\n"
                             f"    4. Test edge cases and failure scenarios\n\n"
-                            f"See: https://book.getfoundry.sh/forge/tests"
+                            f"  For production deployments, use fork testing:\n"
+                            f"    vm.createSelectFork(\"mainnet\");\n"
+                            f"    deployer.run();\n\n"
+                            f"See: https://book.getfoundry.sh/forge/fork-testing"
                         ),
                         location=SourceLocation(file_path=analysis.file_path, line_number=1),
                         context={

@@ -15,6 +15,7 @@ from solcx import compile_standard, get_installed_solc_versions, install_solc
 from deployguard.models.core import SourceLocation
 from deployguard.models.static import (
     BoundaryType,
+    DeploymentMethod,
     FunctionCall,
     ProxyDeployment,
     ProxyType,
@@ -45,6 +46,22 @@ class FoundryScriptParser:
         "broadcast",
         "startBroadcast",
         "stopBroadcast",
+    }
+
+    # Known CREATE2 factory addresses (lowercase for comparison)
+    CREATE2_FACTORY_ADDRESSES: set[str] = {
+        "0x4e59b44847b379578588920ca78fbf26c0b4956c",  # Arachnid deterministic deployer
+        "0xba5ed099633d3b313e4d5f7bdc1305d3c28ba5ed",  # CreateX
+    }
+
+    # Known CREATE2 factory variable name patterns (lowercase for comparison)
+    CREATE2_FACTORY_NAMES: set[str] = {
+        "createx",
+        "create2deployer",
+        "deployer",
+        "factory",
+        "create2factory",
+        "deterministicdeployer",
     }
 
     def __init__(self) -> None:
@@ -191,6 +208,7 @@ class FoundryScriptParser:
                 expr = stmt.get("expression", {})
                 self._check_broadcast_call(expr, analysis)
                 self._check_proxy_deployment(expr, analysis)
+                self._check_createx_deployment(expr, analysis)
                 self._check_private_key_env(expr, analysis)
                 self._check_ownership_transfer(expr, analysis)
                 self._check_function_call(expr, analysis)
@@ -203,6 +221,7 @@ class FoundryScriptParser:
                 # Track proxy deployments assigned to variables
                 num_deployments_before = len(analysis.proxy_deployments)
                 self._check_proxy_deployment(init_value, analysis)
+                self._check_createx_deployment(init_value, analysis)
 
                 # If a proxy was just deployed, capture the variable name
                 if len(analysis.proxy_deployments) > num_deployments_before:
@@ -243,6 +262,13 @@ class FoundryScriptParser:
                 if loop_body.get("nodeType") == "Block":
                     self._traverse_statements(loop_body.get("statements", []), analysis)
 
+            # Check return statements for proxy deployments
+            elif node_type == "Return":
+                expr = stmt.get("expression", {})
+                if expr:
+                    self._check_proxy_deployment(expr, analysis)
+                    self._check_createx_deployment(expr, analysis)
+
     def _check_broadcast_call(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check if expression is a vm.broadcast() call.
 
@@ -277,6 +303,10 @@ class FoundryScriptParser:
     def _check_proxy_deployment(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
         """Check if expression is a proxy contract deployment.
 
+        Detects both:
+        - new ProxyContract(impl, data)
+        - new ProxyContract{salt: salt}(impl, data)  # Foundry-native CREATE2
+
         Args:
             expr: Expression AST node
             analysis: Analysis to update
@@ -285,6 +315,15 @@ class FoundryScriptParser:
             return
 
         callee = expr.get("expression", {})
+        salt = None
+
+        # Handle FunctionCallOptions wrapper for new Contract{salt: ...}() syntax
+        # AST structure: FunctionCall -> FunctionCallOptions -> NewExpression
+        if callee.get("nodeType") == "FunctionCallOptions":
+            # Extract salt from options
+            salt = self._extract_create2_salt_from_options(callee)
+            # Unwrap to get the NewExpression
+            callee = callee.get("expression", {})
 
         # Check for "new ProxyContract(...)" pattern
         if callee.get("nodeType") == "NewExpression":
@@ -303,7 +342,7 @@ class FoundryScriptParser:
 
             if contract_name and contract_name in self.PROXY_TYPES:
                 deployment = self._parse_proxy_deployment(
-                    expr, contract_name, self.PROXY_TYPES[contract_name]
+                    expr, contract_name, self.PROXY_TYPES[contract_name], salt=salt
                 )
                 analysis.proxy_deployments.append(deployment)
 
@@ -442,8 +481,252 @@ class FoundryScriptParser:
 
         return validated_vars
 
+    def _extract_create2_salt_from_options(
+        self, options_node: dict[str, Any]
+    ) -> str | None:
+        """Extract salt from FunctionCallOptions node.
+
+        In Solidity 0.8+, CREATE2 can be used via:
+            new Contract{salt: mySalt}(args...)
+
+        The AST represents this as:
+            FunctionCall
+              expression: FunctionCallOptions
+                expression: NewExpression
+                names: ["salt"]
+                options: [<salt value node>]
+
+        Args:
+            options_node: FunctionCallOptions AST node
+
+        Returns:
+            Salt value as string if found, None otherwise
+        """
+        # FunctionCallOptions has 'names' and 'options' arrays
+        names = options_node.get("names", [])
+        options = options_node.get("options", [])
+
+        if "salt" in names:
+            idx = names.index("salt")
+            if idx < len(options):
+                return self._extract_argument_source(options[idx])
+
+        return None
+
+    def _check_createx_deployment(self, expr: dict[str, Any], analysis: ScriptAnalysis) -> None:
+        """Check for CreateX deployCreate2() or similar CREATE2 factory patterns.
+
+        Detects:
+        - createX.deployCreate2(salt, bytecode)
+        - createX.deployCreate2{value: X}(salt, bytecode)
+        - ICreateX(0xba5Ed...).deployCreate2(salt, bytecode)
+        - Similar patterns from other CREATE2 factories
+
+        Args:
+            expr: Expression AST node
+            analysis: Analysis to update
+        """
+        if expr.get("nodeType") != "FunctionCall":
+            return
+
+        callee = expr.get("expression", {})
+
+        # Handle FunctionCallOptions wrapper (for {value: X} syntax)
+        if callee.get("nodeType") == "FunctionCallOptions":
+            callee = callee.get("expression", {})
+
+        # Check for member access pattern: createX.deployCreate2(...)
+        if callee.get("nodeType") == "MemberAccess":
+            member_name = callee.get("memberName", "")
+            base_expr = callee.get("expression", {})
+
+            # Check for createX.deployCreate2 or similar patterns
+            if member_name in ("deployCreate2", "deployCreate", "deploy", "safeCreate2"):
+                is_create2_factory = self._is_create2_factory(base_expr)
+
+                if is_create2_factory:
+                    deployment = self._parse_createx_deployment(expr, member_name, analysis)
+                    if deployment:
+                        analysis.proxy_deployments.append(deployment)
+
+    def _is_create2_factory(self, expr: dict[str, Any]) -> bool:
+        """Check if expression refers to a CREATE2 factory.
+
+        Checks for:
+        - Variable names like createX, deployer, factory (case-insensitive)
+        - Known factory addresses (0x4e59b44847b379578588920ca78fbf26c0b4956c, etc.)
+        - Type casts to factory interfaces: ICreateX(address)
+
+        Args:
+            expr: AST expression node
+
+        Returns:
+            True if this appears to be a CREATE2 factory
+        """
+        node_type = expr.get("nodeType", "")
+
+        # Check identifier names (case-insensitive)
+        if node_type == "Identifier":
+            name = expr.get("name", "").lower()
+            return name in self.CREATE2_FACTORY_NAMES
+
+        # Check member access (e.g., this.createX)
+        if node_type == "MemberAccess":
+            member_name = expr.get("memberName", "").lower()
+            return member_name in self.CREATE2_FACTORY_NAMES
+
+        # Check function calls - type casts like ICreateX(0xba5Ed...)
+        if node_type == "FunctionCall":
+            callee = expr.get("expression", {})
+
+            # Check for interface cast pattern: ICreateX(address)
+            if callee.get("nodeType") == "Identifier":
+                cast_name = callee.get("name", "").lower()
+                # Common CREATE2 factory interface names
+                if any(
+                    factory in cast_name
+                    for factory in ("createx", "create2", "deployer", "factory")
+                ):
+                    return True
+
+            # Check if the argument is a known factory address
+            args = expr.get("arguments", [])
+            if args:
+                arg_source = self._extract_argument_source(args[0])
+                if arg_source.lower() in self.CREATE2_FACTORY_ADDRESSES:
+                    return True
+
+        # Check for literal addresses
+        if node_type == "Literal":
+            value = expr.get("value", "").lower()
+            return value in self.CREATE2_FACTORY_ADDRESSES
+
+        return False
+
+    def _parse_createx_deployment(
+        self, expr: dict[str, Any], method_name: str, analysis: ScriptAnalysis | None = None
+    ) -> ProxyDeployment | None:
+        """Parse a CreateX deployCreate2() call to extract proxy deployment info.
+
+        CreateX pattern:
+            createX.deployCreate2(salt, bytecode)
+
+        Where bytecode is often:
+            abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(impl, initData))
+
+        Or bytecode might be a variable:
+            bytes memory bytecode = abi.encodePacked(...);
+            createX.deployCreate2(salt, bytecode);
+
+        Args:
+            expr: FunctionCall AST node
+            method_name: Name of the deploy method
+            analysis: Optional ScriptAnalysis to resolve variable references
+
+        Returns:
+            ProxyDeployment if proxy bytecode detected, None otherwise
+        """
+        args = expr.get("arguments", [])
+        if len(args) < 2:
+            return None
+
+        # First arg is salt, second is bytecode
+        salt = self._extract_argument_source(args[0])
+        bytecode_arg = self._extract_argument_source(args[1])
+
+        # If bytecode_arg is a simple identifier, try to resolve it from tracked variables
+        if analysis and bytecode_arg and re.match(r"^\w+$", bytecode_arg.strip()):
+            var_name = bytecode_arg.strip()
+            if var_name in analysis.implementation_variables:
+                var_info = analysis.implementation_variables[var_name]
+                if var_info.assigned_value:
+                    bytecode_arg = var_info.assigned_value
+
+        # Check if bytecode contains proxy creation code
+        proxy_type = self._detect_proxy_in_bytecode(bytecode_arg)
+        if not proxy_type:
+            return None
+
+        # Extract implementation and init data from bytecode expression
+        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(bytecode_arg)
+
+        has_empty_init = self._is_empty_init_data(init_data_arg)
+
+        return ProxyDeployment(
+            proxy_type=proxy_type,
+            implementation_arg=impl_arg,
+            init_data_arg=init_data_arg,
+            location=self._extract_location(expr),
+            has_empty_init=has_empty_init,
+            is_atomic=not has_empty_init,
+            deployment_method=DeploymentMethod.CREATEX,
+            salt=salt,
+            bytecode_source=bytecode_arg,
+        )
+
+    def _detect_proxy_in_bytecode(self, bytecode_expr: str) -> ProxyType | None:
+        """Detect if bytecode expression contains proxy creation code.
+
+        Looks for patterns like:
+        - type(ERC1967Proxy).creationCode
+        - type(TransparentUpgradeableProxy).creationCode
+
+        Args:
+            bytecode_expr: Source code of bytecode expression
+
+        Returns:
+            ProxyType if detected, None otherwise
+        """
+        for contract_name, proxy_type in self.PROXY_TYPES.items():
+            if f"type({contract_name}).creationCode" in bytecode_expr:
+                return proxy_type
+        return None
+
+    def _extract_proxy_args_from_bytecode(self, bytecode_expr: str) -> tuple[str, str]:
+        """Extract implementation and init data from bytecode expression.
+
+        Parses patterns like:
+            abi.encodePacked(
+                type(ERC1967Proxy).creationCode,
+                abi.encode(impl, initData)
+            )
+
+        Args:
+            bytecode_expr: Source code of bytecode expression
+
+        Returns:
+            Tuple of (implementation_arg, init_data_arg)
+        """
+        impl_arg = ""
+        init_data_arg = ""
+
+        # Look for abi.encode(impl, initData) pattern
+        # Use a more robust regex that handles nested parentheses
+        encode_match = re.search(
+            r"abi\.encode\s*\(\s*([^,]+)\s*,\s*(.+?)\s*\)\s*\)?$",
+            bytecode_expr,
+            re.MULTILINE | re.DOTALL,
+        )
+        if encode_match:
+            impl_arg = encode_match.group(1).strip()
+            init_data_arg = encode_match.group(2).strip()
+        else:
+            # Try abi.encodeCall pattern
+            encode_call_match = re.search(
+                r"abi\.encodeCall\s*\(.+\)", bytecode_expr, re.DOTALL
+            )
+            if encode_call_match:
+                # Has init call - not empty
+                init_data_arg = encode_call_match.group(0)
+
+        return impl_arg, init_data_arg
+
     def _parse_proxy_deployment(
-        self, expr: dict[str, Any], contract_name: str, proxy_type: ProxyType
+        self,
+        expr: dict[str, Any],
+        contract_name: str,
+        proxy_type: ProxyType,
+        salt: str | None = None,
     ) -> ProxyDeployment:
         """Parse a proxy deployment expression.
 
@@ -451,6 +734,7 @@ class FoundryScriptParser:
             expr: FunctionCall AST node for "new ProxyContract(...)"
             contract_name: Name of proxy contract
             proxy_type: Type of proxy
+            salt: CREATE2 salt if using new Contract{salt: ...}() syntax
 
         Returns:
             ProxyDeployment with extracted info
@@ -470,6 +754,9 @@ class FoundryScriptParser:
         # Check if init data is empty
         has_empty_init = self._is_empty_init_data(init_data_arg)
 
+        # Determine deployment method based on salt presence
+        deployment_method = DeploymentMethod.NEW_CREATE2 if salt else DeploymentMethod.NEW
+
         return ProxyDeployment(
             proxy_type=proxy_type,
             implementation_arg=impl_arg,
@@ -477,6 +764,8 @@ class FoundryScriptParser:
             location=self._extract_location(expr),
             has_empty_init=has_empty_init,
             is_atomic=not has_empty_init,  # Will be refined by tx boundary analysis
+            deployment_method=deployment_method,
+            salt=salt,
         )
 
     def _is_empty_init_data(self, init_data: str) -> bool:
@@ -490,7 +779,7 @@ class FoundryScriptParser:
         """
         cleaned = init_data.strip().strip('"').strip("'")
 
-        # Empty patterns
+        # Empty patterns - exact matches
         empty_patterns = {
             "",
             "0x",
@@ -501,7 +790,22 @@ class FoundryScriptParser:
             "new bytes(0)",
         }
 
-        return cleaned in empty_patterns or cleaned == ""
+        if cleaned in empty_patterns or cleaned == "":
+            return True
+
+        # Regex patterns for more flexible matching
+        empty_regexes = [
+            r'^bytes\s*\(\s*["\']?\s*["\']?\s*\)?$',  # bytes(""), bytes(''), bytes("")
+            r'^new\s+bytes\s*\(\s*0\s*\)$',  # new bytes(0)
+            r'^["\']["\']$',  # "" or ''
+            r'^0x$',  # 0x
+        ]
+
+        for pattern in empty_regexes:
+            if re.match(pattern, cleaned):
+                return True
+
+        return False
 
     def _extract_argument_source(self, arg: dict[str, Any]) -> str:
         """Extract source code for an argument expression.

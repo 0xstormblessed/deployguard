@@ -6,7 +6,7 @@ deployment scripts. Rules are automatically registered when imported.
 Available rule categories:
 - Proxy rules: NON_ATOMIC_INIT, HARDCODED_IMPL, MISSING_IMPL_VALIDATION
 - Security rules: PRIVATE_KEY_ENV, MISSING_OWNERSHIP_TRANSFER, DEPLOYER_ADMIN, UUPS_*
-- Testing rules: NO_TEST, NO_FORK_TEST, TEST_NO_RUN
+- Testing rules: NO_TEST, TEST_NO_RUN
 - Config rules: HARDCODED_ADDRESS
 - Dynamic rules: IMPL_MISMATCH, SHADOW_CONTRACT, UNINITIALIZED_PROXY, ADMIN_MISMATCH, NON_STANDARD_PROXY
 """
