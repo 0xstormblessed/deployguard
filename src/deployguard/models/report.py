@@ -201,8 +201,8 @@ class BatchAnalysisReport:
 
     @property
     def files_without_findings(self) -> list[Path]:
-        """Get list of files with no findings."""
-        return [r.file_path for r in self.results if not r.has_findings]
+        """Get list of successfully analyzed files with no findings."""
+        return [r.file_path for r in self.results if r.success and not r.has_findings]
 
     @property
     def failed_files(self) -> list[Path]:
@@ -220,6 +220,9 @@ class BatchAnalysisReport:
         for result in self.results:
             all_findings.extend(result.findings)
 
+        # Check if any files failed to analyze
+        failed_count = sum(1 for r in self.results if not r.success)
+
         self.summary = ReportSummary(
             total_findings=len(all_findings),
             critical_count=sum(1 for f in all_findings if f.severity == Severity.CRITICAL),
@@ -231,4 +234,9 @@ class BatchAnalysisReport:
             contracts_verified=0,
             rules_executed=0,
         )
+
+        # Override passed status if any files failed to analyze
+        if failed_count > 0:
+            self.summary.passed = False
+
         self.exit_code = 1 if not self.summary.passed else 0

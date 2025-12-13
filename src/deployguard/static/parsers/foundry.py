@@ -24,6 +24,7 @@ from deployguard.models.static import (
     TransactionBoundary,
     VariableInfo,
 )
+from deployguard.static.parsers.foundry_project import FoundryProject
 
 
 class FoundryScriptParser:
@@ -67,6 +68,7 @@ class FoundryScriptParser:
     def __init__(self) -> None:
         """Initialize the solc-based parser."""
         self.current_file: Path | None = None
+        self.current_source_file: Path | None = None  # Tracks current file being analyzed (for inherited contracts)
         self.source_code: str = ""
         self.source_lines: list[str] = []
 
@@ -108,27 +110,102 @@ class FoundryScriptParser:
         )
 
         try:
-            # Detect pragma version and install solc if needed
-            pragma_version = self._extract_pragma_version(source)
-            solc_version = self._determine_solc_version(pragma_version)
+            # Detect Foundry project first (for remappings and solc version)
+            remappings: list[str] = []
+            project_root: Path | None = None
+            foundry_solc_version: str | None = None
+
+            if self.current_file:
+                foundry_project = FoundryProject(self.current_file)
+                if foundry_project.detect():
+                    project_root = foundry_project.get_project_root()
+
+                    # Check if lib directory has uninitialized dependencies
+                    lib_ok, empty_libs = foundry_project.check_lib_initialized()
+                    if not lib_ok:
+                        empty_list = ", ".join(empty_libs[:5])
+                        if len(empty_libs) > 5:
+                            empty_list += f", ... and {len(empty_libs) - 5} more"
+                        analysis.parse_errors.append(
+                            f"Foundry dependencies not installed. Empty lib directories: {empty_list}. "
+                            "Run 'forge install' or 'git submodule update --init --recursive' to install dependencies."
+                        )
+                        return analysis
+
+                    remappings = foundry_project.get_remappings_list()
+                    foundry_solc_version = foundry_project.get_solc_version()
+
+                    if remappings:
+                        analysis.parse_warnings.append(
+                            f"Detected Foundry project with {len(remappings)} remappings"
+                        )
+
+                    # Validate dependencies exist
+                    missing_deps = foundry_project.validate_dependencies()
+                    if missing_deps:
+                        for dep in missing_deps[:3]:  # Show first 3
+                            analysis.parse_warnings.append(f"Missing dependency: {dep}")
+                        if len(missing_deps) > 3:
+                            analysis.parse_warnings.append(
+                                f"...and {len(missing_deps) - 3} more missing dependencies"
+                            )
+                        analysis.parse_warnings.append(
+                            "Run 'forge install' to install missing dependencies"
+                        )
+
+            # Determine solc version: prefer foundry.toml, fall back to pragma
+            if foundry_solc_version:
+                solc_version = foundry_solc_version
+                analysis.parse_warnings.append(f"Using solc {solc_version} from foundry.toml")
+            else:
+                pragma_version = self._extract_pragma_version(source)
+                solc_version = self._determine_solc_version(pragma_version)
 
             installed = get_installed_solc_versions()
-            if solc_version not in [str(v) for v in installed]:
-                analysis.parse_warnings.append(f"Installing solc {solc_version}...")
-                install_solc(solc_version)
+            installed_strs = [str(v) for v in installed]
+            if solc_version not in installed_strs:
+                # Check if we can use an installed compatible version
+                compatible = None
+                for inst_ver in sorted(installed_strs, reverse=True):
+                    if inst_ver.startswith(solc_version.rsplit(".", 1)[0]):
+                        # Same major.minor version
+                        compatible = inst_ver
+                        break
+
+                if compatible:
+                    analysis.parse_warnings.append(
+                        f"solc {solc_version} not installed, using compatible {compatible}"
+                    )
+                    solc_version = compatible
+                else:
+                    analysis.parse_warnings.append(f"Installing solc {solc_version}...")
+                    install_solc(solc_version)
 
             # Compile to get AST
-            input_json = {
+            input_json: dict[str, Any] = {
                 "language": "Solidity",
                 "sources": {file_path: {"content": source}},
                 "settings": {
                     "outputSelection": {"*": {"": ["ast"]}},
-                    # Foundry scripts need forge-std remappings
-                    "remappings": self._get_foundry_remappings(),
                 },
             }
 
-            output = compile_standard(input_json, solc_version=solc_version)
+            # Add remappings if detected
+            if remappings:
+                input_json["settings"]["remappings"] = remappings
+
+            # Build allow_paths for solc to access imports
+            allow_paths: list[str] = []
+            if project_root:
+                allow_paths.append(str(project_root))
+            if self.current_file:
+                allow_paths.append(str(self.current_file.parent))
+
+            output = compile_standard(
+                input_json,
+                solc_version=solc_version,
+                allow_paths=allow_paths if allow_paths else None,
+            )
 
             # Check for errors
             if "errors" in output:
@@ -138,10 +215,39 @@ class FoundryScriptParser:
                     else:
                         analysis.parse_warnings.append(error.get("formattedMessage", ""))
 
-            # Extract AST
-            if "sources" in output and file_path in output["sources"]:
-                ast = output["sources"][file_path]["ast"]
-                self._analyze_ast(ast, analysis)
+            # Build source code map for all compiled files
+            # This is needed to extract source snippets from inherited contracts
+            source_code_map: dict[str, str] = {}
+            if "sources" in output:
+                for source_path, source_info in output["sources"].items():
+                    # solc output includes absolute paths, we need to read the source
+                    try:
+                        source_file = Path(source_path)
+                        if source_file.exists():
+                            source_code_map[source_path] = source_file.read_text()
+                    except Exception:
+                        pass
+
+            # Extract AST from all sources (includes inherited contracts)
+            # This is critical for detecting vulnerabilities in inherited helper functions
+            if "sources" in output:
+                for source_path, source_info in output["sources"].items():
+                    if "ast" in source_info:
+                        ast = source_info["ast"]
+                        # Switch source context for proper source snippet extraction
+                        # Use absolutePath from AST if available, otherwise use the key
+                        actual_path = ast.get("absolutePath", source_path)
+                        if source_path in source_code_map:
+                            self.source_code = source_code_map[source_path]
+                            self.source_lines = self.source_code.split("\n")
+                            # Track current source file for accurate location reporting
+                            self.current_source_file = Path(actual_path)
+                        self._analyze_ast(ast, analysis)
+
+                # Restore original source context
+                self.source_code = source
+                self.source_lines = source.split("\n")
+                self.current_source_file = self.current_file
 
             # Post-process to calculate transaction scope boundaries
             self._calculate_scope_boundaries(analysis)
@@ -213,6 +319,12 @@ class FoundryScriptParser:
                 self._check_ownership_transfer(expr, analysis)
                 self._check_function_call(expr, analysis)
                 self._check_validation_pattern(expr, analysis)
+
+                # Also check Assignment expressions (e.g., proxyAddress = createX.deployCreate2(...))
+                if expr.get("nodeType") == "Assignment":
+                    rhs = expr.get("rightHandSide", {})
+                    self._check_proxy_deployment(rhs, analysis)
+                    self._check_createx_deployment(rhs, analysis)
 
             # Check variable declarations with proxy deployments
             elif node_type == "VariableDeclarationStatement":
@@ -648,7 +760,9 @@ class FoundryScriptParser:
             return None
 
         # Extract implementation and init data from bytecode expression
-        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(bytecode_arg)
+        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(
+            bytecode_arg, proxy_type
+        )
 
         has_empty_init = self._is_empty_init_data(init_data_arg)
 
@@ -682,7 +796,9 @@ class FoundryScriptParser:
                 return proxy_type
         return None
 
-    def _extract_proxy_args_from_bytecode(self, bytecode_expr: str) -> tuple[str, str]:
+    def _extract_proxy_args_from_bytecode(
+        self, bytecode_expr: str, proxy_type: ProxyType | None = None
+    ) -> tuple[str, str]:
         """Extract implementation and init data from bytecode expression.
 
         Parses patterns like:
@@ -691,8 +807,12 @@ class FoundryScriptParser:
                 abi.encode(impl, initData)
             )
 
+        For TransparentUpgradeableProxy (3 args: impl, admin, data):
+            abi.encode(impl, admin, data)
+
         Args:
             bytecode_expr: Source code of bytecode expression
+            proxy_type: Type of proxy to help determine argument positions
 
         Returns:
             Tuple of (implementation_arg, init_data_arg)
@@ -700,16 +820,30 @@ class FoundryScriptParser:
         impl_arg = ""
         init_data_arg = ""
 
-        # Look for abi.encode(impl, initData) pattern
-        # Use a more robust regex that handles nested parentheses
-        encode_match = re.search(
-            r"abi\.encode\s*\(\s*([^,]+)\s*,\s*(.+?)\s*\)\s*\)?$",
-            bytecode_expr,
-            re.MULTILINE | re.DOTALL,
-        )
-        if encode_match:
-            impl_arg = encode_match.group(1).strip()
-            init_data_arg = encode_match.group(2).strip()
+        # Extract all arguments from abi.encode(...) using balanced paren matching
+        # Find the start of abi.encode(
+        encode_start = bytecode_expr.find("abi.encode(")
+        if encode_start != -1:
+            # Find matching closing paren
+            start_idx = encode_start + len("abi.encode(")
+            args_str = self._extract_balanced_parens(bytecode_expr[start_idx:])
+            # Split by comma but handle nested parens like bytes("")
+            args = self._split_args(args_str) if args_str else []
+        else:
+            args = []
+
+        if len(args) >= 2:
+            impl_arg = args[0].strip()
+            # For TransparentUpgradeableProxy: args are (impl, admin, data)
+            # For ERC1967Proxy/BeaconProxy: args are (impl, data)
+            if proxy_type == ProxyType.TRANSPARENT_UPGRADEABLE_PROXY and len(args) >= 3:
+                init_data_arg = args[2].strip()
+            else:
+                init_data_arg = args[-1].strip()  # Last arg is always init data
+
+            # Remove trailing comments that may have been captured
+            if "//" in init_data_arg:
+                init_data_arg = init_data_arg.split("//")[0].strip()
         else:
             # Try abi.encodeCall pattern
             encode_call_match = re.search(
@@ -720,6 +854,68 @@ class FoundryScriptParser:
                 init_data_arg = encode_call_match.group(0)
 
         return impl_arg, init_data_arg
+
+    def _split_args(self, args_str: str) -> list[str]:
+        """Split arguments by comma, handling nested parentheses.
+
+        Args:
+            args_str: Comma-separated arguments string
+
+        Returns:
+            List of individual arguments
+        """
+        args = []
+        current_arg = ""
+        paren_depth = 0
+
+        for char in args_str:
+            if char == "(":
+                paren_depth += 1
+                current_arg += char
+            elif char == ")":
+                paren_depth -= 1
+                current_arg += char
+            elif char == "," and paren_depth == 0:
+                args.append(current_arg.strip())
+                current_arg = ""
+            else:
+                current_arg += char
+
+        if current_arg.strip():
+            args.append(current_arg.strip())
+
+        return args
+
+    def _extract_balanced_parens(self, s: str) -> str:
+        """Extract content within balanced parentheses.
+
+        Given a string starting after an opening paren, extract everything
+        up to the matching closing paren.
+
+        Args:
+            s: String starting after the opening paren
+
+        Returns:
+            Content between balanced parens (excluding the final closing paren)
+        """
+        result = ""
+        paren_depth = 1  # We're already inside the first paren
+
+        for char in s:
+            if char == "(":
+                paren_depth += 1
+                result += char
+            elif char == ")":
+                paren_depth -= 1
+                if paren_depth == 0:
+                    # Found matching closing paren
+                    return result
+                result += char
+            else:
+                result += char
+
+        # No matching closing paren found
+        return result
 
     def _parse_proxy_deployment(
         self,
@@ -834,9 +1030,12 @@ class FoundryScriptParser:
         Returns:
             SourceLocation with line/column info
         """
+        # Use current_source_file for inherited contracts, fallback to current_file
+        source_file = self.current_source_file or self.current_file
+
         if "src" not in node:
             return SourceLocation(
-                file_path=str(self.current_file) if self.current_file else "",
+                file_path=str(source_file) if source_file else "",
                 line_number=0,
             )
 
@@ -847,13 +1046,13 @@ class FoundryScriptParser:
         # Calculate line number
         line_number = self.source_code[:start].count("\n") + 1
 
-        # Get line content
-        line_content = (
-            self.source_lines[line_number - 1] if line_number <= len(self.source_lines) else ""
-        )
+        # Get line content (strip leading/trailing whitespace for display)
+        line_content = ""
+        if line_number <= len(self.source_lines):
+            line_content = self.source_lines[line_number - 1].strip()
 
         return SourceLocation(
-            file_path=str(self.current_file) if self.current_file else "",
+            file_path=str(source_file) if source_file else "",
             line_number=line_number,
             line_content=line_content,
         )
@@ -863,27 +1062,118 @@ class FoundryScriptParser:
         match = re.search(r"pragma\s+solidity\s+([^;]+);", source)
         return match.group(1).strip() if match else None
 
-    def _determine_solc_version(self, pragma: str | None) -> str:
-        """Determine solc version to use based on pragma."""
-        # Parse pragma version string
-        if not pragma:
+    def _determine_solc_version(self, pragma_version: str | None) -> str:
+        """Determine which solc version to use based on pragma.
+
+        Args:
+            pragma_version: Pragma version string (e.g., "^0.8.30", ">=0.7.0 <0.9.0", "0.8.29")
+
+        Returns:
+            Specific solc version to use (e.g., "0.8.29")
+        """
+        try:
+            from solcx import get_installable_solc_versions
+        except ImportError:
             return "0.8.20"
 
-        if pragma.startswith("^0.8") or "0.8" in pragma:
+        if not pragma_version:
+            return self._get_latest_version_in_range("0.8.0", "0.9.0") or "0.8.20"
+
+        pragma_version = pragma_version.strip()
+
+        # Handle caret (^) - ^X.Y.Z means >=X.Y.Z <(X+1).0.0
+        if pragma_version.startswith("^"):
+            version_str = pragma_version[1:]
+            version_match = re.match(r"^(\d+)\.(\d+)\.(\d+)$", version_str)
+            if version_match:
+                major, minor, patch = map(int, version_match.groups())
+                # Try exact version first
+                if self._is_version_available(version_str):
+                    return version_str
+                # Otherwise find latest in range
+                min_version = f"{major}.{minor}.{patch}"
+                max_version = f"{major + 1}.0.0"
+                resolved = self._get_latest_version_in_range(min_version, max_version)
+                if resolved:
+                    return resolved
+                return self._legacy_version_fallback(version_str)
+
+        # Handle exact version (e.g., "0.8.29")
+        if re.match(r"^\d+\.\d+\.\d+$", pragma_version):
+            if self._is_version_available(pragma_version):
+                return pragma_version
+            # Try to find compatible version
+            parts = pragma_version.split(".")
+            return (
+                self._get_latest_version_in_range(
+                    pragma_version,
+                    f"{parts[0]}.{int(parts[1]) + 1}.0",
+                )
+                or self._legacy_version_fallback(pragma_version)
+            )
+
+        # Handle >= or > ranges
+        if ">=" in pragma_version or ">" in pragma_version:
+            min_match = re.search(r">=?(\d+\.\d+\.\d+)", pragma_version)
+            max_match = re.search(r"<(\d+\.\d+\.\d+)", pragma_version)
+            if min_match:
+                min_ver = min_match.group(1)
+                max_ver = (
+                    max_match.group(1) if max_match else f"{int(min_ver.split('.')[0]) + 1}.0.0"
+                )
+                resolved = self._get_latest_version_in_range(min_ver, max_ver)
+                if resolved:
+                    return resolved
+
+        return self._get_latest_version_in_range("0.8.0", "0.9.0") or "0.8.20"
+
+    def _is_version_available(self, version: str) -> bool:
+        """Check if a specific solc version is available for installation."""
+        try:
+            from solcx import get_installable_solc_versions
+
+            available = get_installable_solc_versions()
+            return any(str(v) == version for v in available)
+        except Exception:
+            return False
+
+    def _get_latest_version_in_range(self, min_version: str, max_version: str) -> str | None:
+        """Get the latest available solc version within a range."""
+        try:
+            from packaging import version as pkg_version
+            from solcx import get_installable_solc_versions
+
+            available = get_installable_solc_versions()
+            matching = []
+            min_ver = pkg_version.parse(min_version)
+            max_ver = pkg_version.parse(max_version)
+
+            for v in available:
+                v_str = str(v)
+                v_parsed = pkg_version.parse(v_str)
+                if min_ver <= v_parsed < max_ver:
+                    matching.append(v_str)
+
+            if matching:
+                matching.sort(key=lambda x: pkg_version.parse(x), reverse=True)
+                return matching[0]
+        except Exception:
+            pass
+        return None
+
+    def _legacy_version_fallback(self, version_str: str) -> str:
+        """Fallback for legacy version handling when exact version unavailable."""
+        if version_str.startswith("0.8"):
             return "0.8.20"
-        elif pragma.startswith("^0.7") or "0.7" in pragma:
+        elif version_str.startswith("0.7"):
             return "0.7.6"
-        elif pragma.startswith("^0.6") or "0.6" in pragma:
+        elif version_str.startswith("0.6"):
             return "0.6.12"
-
+        elif version_str.startswith("0.5"):
+            return "0.5.17"
+        elif version_str.startswith("0.4"):
+            return "0.4.26"
         return "0.8.20"
-
-    def _get_foundry_remappings(self) -> list[str]:
-        """Get Foundry remappings for forge-std."""
-        # TODO: Parse from foundry.toml or use forge remappings
-        return [
-            "forge-std/=lib/forge-std/src/",
-        ]
 
     def _get_boundary_type(self, func_name: str) -> BoundaryType:
         """Map function name to boundary type."""

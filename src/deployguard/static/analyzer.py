@@ -162,6 +162,10 @@ class StaticAnalyzer:
             if fail_fast and not result.success:
                 break
 
+            # Always fail fast on setup/dependency errors (affects all files)
+            if not result.success and result.error and self._is_setup_error(result.error):
+                break
+
         # Calculate total time
         end_time = time.time()
         report.total_analysis_time_ms = (end_time - start_time) * 1000
@@ -185,6 +189,19 @@ class StaticAnalyzer:
         try:
             # Parse the file
             analysis = self.analyze_file(file_path)
+
+            # Check for parse errors
+            if analysis.parse_errors:
+                end_time = time.time()
+                return FileAnalysisResult(
+                    file_path=file_path,
+                    success=False,
+                    findings=[],
+                    error=analysis.parse_errors[0],
+                    error_type="ParseError",
+                    error_traceback=None,
+                    analysis_time_ms=(end_time - start_time) * 1000,
+                )
 
             # Run rules
             violations = self.run_rules(analysis)
@@ -215,6 +232,27 @@ class StaticAnalyzer:
                 analysis_time_ms=(end_time - start_time) * 1000,
             )
 
+    def _is_setup_error(self, error_message: str) -> bool:
+        """Check if an error is a setup/dependency error that affects all files.
+
+        These errors should fail fast since they'll affect every file in the project.
+
+        Args:
+            error_message: The error message to check
+
+        Returns:
+            True if this is a setup error that should fail fast
+        """
+        setup_error_patterns = [
+            "dependencies not installed",
+            "Empty lib directories",
+            "forge install",
+            "git submodule",
+            "Run 'forge install'",
+            "requires different compiler version",
+        ]
+        return any(pattern in error_message for pattern in setup_error_patterns)
+
     def _violations_to_findings(
         self, violations: list[RuleViolation], file_path: Path
     ) -> list[Finding]:
@@ -231,7 +269,7 @@ class StaticAnalyzer:
         for violation in violations:
             finding = Finding(
                 id=str(uuid.uuid4()),
-                rule_id=violation.rule_id,
+                rule_id=violation.rule.rule_id,
                 title=violation.message,
                 description=violation.message,
                 severity=violation.severity,
