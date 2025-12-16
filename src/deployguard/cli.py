@@ -61,7 +61,7 @@ def _print_single_file_findings(file_path: Path, findings: list) -> None:
             f"[bold]{finding.rule_id}: {finding.title}[/bold]"
         )
         if finding.location:
-            console.print(f"  Location: line {finding.location.line}")
+            console.print(f"  Location: line {finding.location.line_number}")
         console.print(f"  {finding.description}")
 
         # Print hack references and real-world context
@@ -124,7 +124,7 @@ def _print_batch_report_console(report: BatchAnalysisReport) -> None:
                 )
 
                 if finding.location:
-                    console.print(f"  Location: line {finding.location.line}")
+                    console.print(f"  Location: line {finding.location.line_number}")
 
                 console.print(f"  Description: {finding.description}")
 
@@ -289,7 +289,7 @@ def audit(
             findings = [
                 Finding(
                     id=str(uuid.uuid4()),
-                    rule_id=v.rule_id,
+                    rule_id=v.rule.rule_id,
                     title=v.message,
                     description=v.message,
                     severity=v.severity,
@@ -565,8 +565,12 @@ def check(path: str, output: str) -> None:
                     if cov.test_files:
                         for test_file in cov.test_files:
                             test_name = test_file.relative_to(analysis.project_root)
-                            fork_badge = " [cyan](fork)[/cyan]" if test_file in cov.fork_tests else ""
-                            run_badge = " [yellow](calls run())[/yellow]" if cov.test_calls_run else ""
+                            fork_badge = (
+                                " [cyan](fork)[/cyan]" if test_file in cov.fork_tests else ""
+                            )
+                            run_badge = (
+                                " [yellow](calls run())[/yellow]" if cov.test_calls_run else ""
+                            )
                             console.print(f"    └─ {test_name}{fork_badge}{run_badge}")
                     else:
                         console.print("    [dim]No tests found[/dim]")
@@ -627,16 +631,12 @@ def rules(category: str, severity: str, output: str) -> None:
         # Filter by category
         if category != "all":
             category_enum = RuleCategory(category)
-            all_rules = {
-                k: v for k, v in all_rules.items() if v.rule.category == category_enum
-            }
+            all_rules = {k: v for k, v in all_rules.items() if v.rule.category == category_enum}
 
         # Filter by severity
         if severity != "all":
             severity_enum = Severity(severity)
-            all_rules = {
-                k: v for k, v in all_rules.items() if v.rule.severity == severity_enum
-            }
+            all_rules = {k: v for k, v in all_rules.items() if v.rule.severity == severity_enum}
 
         if output == "json":
             # JSON output

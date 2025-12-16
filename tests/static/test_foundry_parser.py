@@ -60,9 +60,7 @@ class TestFoundryScriptParser:
         version = parser._determine_solc_version("^0.7.0")
         assert version == "0.7.6"
 
-    def test_is_empty_init_data_empty_string(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_is_empty_init_data_empty_string(self, parser: FoundryScriptParser) -> None:
         """Test empty init data detection with empty string."""
         assert parser._is_empty_init_data('""') is True
         assert parser._is_empty_init_data("''") is True
@@ -72,17 +70,13 @@ class TestFoundryScriptParser:
         """Test empty init data detection with 0x."""
         assert parser._is_empty_init_data("0x") is True
 
-    def test_is_empty_init_data_bytes_empty(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_is_empty_init_data_bytes_empty(self, parser: FoundryScriptParser) -> None:
         """Test empty init data detection with bytes("")."""
         assert parser._is_empty_init_data('bytes("")') is True
         assert parser._is_empty_init_data("bytes(0)") is True
         assert parser._is_empty_init_data("new bytes(0)") is True
 
-    def test_is_empty_init_data_non_empty(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_is_empty_init_data_non_empty(self, parser: FoundryScriptParser) -> None:
         """Test empty init data detection with non-empty data."""
         assert parser._is_empty_init_data("abi.encodeCall(Token.init, ())") is False
         assert parser._is_empty_init_data("initData") is False
@@ -104,14 +98,8 @@ class TestFoundryScriptParser:
     def test_get_boundary_type(self, parser: FoundryScriptParser) -> None:
         """Test boundary type mapping."""
         assert parser._get_boundary_type("broadcast") == BoundaryType.VM_BROADCAST
-        assert (
-            parser._get_boundary_type("startBroadcast")
-            == BoundaryType.VM_START_BROADCAST
-        )
-        assert (
-            parser._get_boundary_type("stopBroadcast")
-            == BoundaryType.VM_STOP_BROADCAST
-        )
+        assert parser._get_boundary_type("startBroadcast") == BoundaryType.VM_START_BROADCAST
+        assert parser._get_boundary_type("stopBroadcast") == BoundaryType.VM_STOP_BROADCAST
 
     def test_proxy_types_mapping(self, parser: FoundryScriptParser) -> None:
         """Test proxy types mapping is complete."""
@@ -346,21 +334,18 @@ class TestCreate2Detection:
 
         # Should detect TransparentUpgradeableProxy
         bytecode = "abi.encodePacked(type(TransparentUpgradeableProxy).creationCode, abi.encode(impl, admin, data))"
-        assert (
-            parser._detect_proxy_in_bytecode(bytecode)
-            == ProxyType.TRANSPARENT_UPGRADEABLE_PROXY
-        )
+        assert parser._detect_proxy_in_bytecode(bytecode) == ProxyType.TRANSPARENT_UPGRADEABLE_PROXY
 
         # Should return None for non-proxy bytecode
         bytecode = "type(MyToken).creationCode"
         assert parser._detect_proxy_in_bytecode(bytecode) is None
 
-    def test_extract_proxy_args_from_bytecode(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_extract_proxy_args_from_bytecode(self, parser: FoundryScriptParser) -> None:
         """Test extraction of impl and init data from bytecode expression."""
         # Standard abi.encode pattern
-        bytecode = 'abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(implAddress, initData))'
+        bytecode = (
+            "abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(implAddress, initData))"
+        )
         impl, init_data = parser._extract_proxy_args_from_bytecode(bytecode)
         assert impl == "implAddress"
         assert init_data == "initData"
@@ -372,11 +357,9 @@ class TestCreate2Detection:
         assert init_data == 'bytes("")'
 
     @pytest.mark.slow
-    def test_parse_createx_vulnerable_deployment(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_parse_createx_vulnerable_deployment(self, parser: FoundryScriptParser) -> None:
         """Test parsing a vulnerable CreateX deployment (requires solc)."""
-        source = '''
+        source = """
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -399,7 +382,7 @@ contract VulnerableCreateX {
         return createX.deployCreate2(bytes32(0), bytecode);
     }
 }
-'''
+"""
         result = parser.parse_source(source, "VulnerableCreateX.s.sol")
 
         # Should detect the CreateX proxy deployment
@@ -410,11 +393,9 @@ contract VulnerableCreateX {
         assert deployment.has_empty_init is True
 
     @pytest.mark.slow
-    def test_parse_createx_safe_deployment(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_parse_createx_safe_deployment(self, parser: FoundryScriptParser) -> None:
         """Test parsing a safe CreateX deployment with init data (requires solc)."""
-        source = '''
+        source = """
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -442,7 +423,7 @@ contract SafeCreateX {
         return createX.deployCreate2(bytes32(0), bytecode);
     }
 }
-'''
+"""
         result = parser.parse_source(source, "SafeCreateX.s.sol")
 
         # Should detect the CreateX proxy deployment
@@ -453,11 +434,9 @@ contract SafeCreateX {
         assert deployment.has_empty_init is False
 
     @pytest.mark.slow
-    def test_parse_foundry_native_create2(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_parse_foundry_native_create2(self, parser: FoundryScriptParser) -> None:
         """Test parsing Foundry-native CREATE2 syntax (requires solc)."""
-        source = '''
+        source = """
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -478,7 +457,7 @@ contract NativeCreate2 {
         return address(proxy);
     }
 }
-'''
+"""
         result = parser.parse_source(source, "NativeCreate2.s.sol")
 
         # Should detect the proxy deployment with CREATE2
@@ -490,11 +469,9 @@ contract NativeCreate2 {
         assert deployment.has_empty_init is False
 
     @pytest.mark.slow
-    def test_parse_foundry_native_create2_vulnerable(
-        self, parser: FoundryScriptParser
-    ) -> None:
+    def test_parse_foundry_native_create2_vulnerable(self, parser: FoundryScriptParser) -> None:
         """Test parsing vulnerable Foundry-native CREATE2 with empty init (requires solc)."""
-        source = '''
+        source = """
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
@@ -509,7 +486,7 @@ contract VulnerableNativeCreate2 {
         return address(proxy);
     }
 }
-'''
+"""
         result = parser.parse_source(source, "VulnerableNativeCreate2.s.sol")
 
         # Should detect the vulnerable proxy deployment
@@ -518,3 +495,122 @@ contract VulnerableNativeCreate2 {
         assert deployment.proxy_type == ProxyType.ERC1967_PROXY
         assert deployment.deployment_method == DeploymentMethod.NEW_CREATE2
         assert deployment.has_empty_init is True
+
+    @pytest.mark.slow
+    def test_parse_createx_and_init_safe(self, parser: FoundryScriptParser) -> None:
+        """Test CreateX deployCreate2AndInit (safe pattern with separate init)."""
+        source = """
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+struct Values {
+    uint256 constructorAmount;
+    uint256 initCallAmount;
+}
+
+interface ICreateX {
+    function deployCreate2AndInit(bytes32 salt, bytes memory bytecode, bytes memory init, Values memory values) external returns (address);
+}
+
+contract SafeCreateX {
+    ICreateX createX;
+
+    function run() external {
+        bytes32 salt = keccak256("salt");
+        MyToken impl = new MyToken();
+
+        bytes memory bytecode = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(address(impl), "")
+        );
+
+        // SAFE: Using deployCreate2AndInit with separate init data
+        bytes memory initData = abi.encodeCall(MyToken.initialize, ("Token", "TKN"));
+        Values memory vals = Values(0, 0);
+        address proxy = createX.deployCreate2AndInit(salt, bytecode, initData, vals);
+    }
+}
+
+contract MyToken {
+    function initialize(string memory, string memory) external {}
+}
+
+contract ERC1967Proxy {
+    constructor(address impl, bytes memory data) {}
+}
+"""
+        result = parser.parse_source(source, "SafeCreateX.s.sol")
+
+        assert len(result.proxy_deployments) == 1
+        deployment = result.proxy_deployments[0]
+        assert deployment.proxy_type == ProxyType.ERC1967_PROXY
+        assert deployment.deployment_method == DeploymentMethod.CREATEX
+        # init_data_arg should be the separate init data, not the empty one in bytecode
+        assert deployment.has_empty_init is False
+
+    @pytest.mark.slow
+    def test_parse_createx_clone_empty_init(self, parser: FoundryScriptParser) -> None:
+        """Test CreateX deployCreate2Clone with empty init (vulnerable)."""
+        source = """
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+interface ICreateX {
+    function deployCreate2Clone(bytes32 salt, address impl, bytes memory init) external returns (address);
+}
+
+contract VulnerableClone {
+    ICreateX createX;
+
+    function run() external {
+        bytes32 salt = keccak256("salt");
+        address impl = address(0x1234567890123456789012345678901234567890);
+        // VULNERABLE: Clone with empty init
+        address proxy = createX.deployCreate2Clone(salt, impl, "");
+    }
+}
+"""
+        result = parser.parse_source(source, "VulnerableClone.s.sol")
+
+        # Clone detection may not create a proxy deployment since it's not using bytecode pattern
+        # This test verifies the parser handles clone syntax without errors
+        assert len(result.parse_errors) == 0
+
+    @pytest.mark.slow
+    def test_parse_createx_single_arg(self, parser: FoundryScriptParser) -> None:
+        """Test CreateX deployCreate2(bytes) single arg pattern."""
+        source = """
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.19;
+
+interface ICreateX {
+    function deployCreate2(bytes memory bytecode) external returns (address);
+}
+
+contract SingleArgCreateX {
+    ICreateX createX;
+
+    function run() external {
+        MyToken impl = new MyToken();
+
+        // deployCreate2 with single arg (salt derived from msg.sender)
+        bytes memory bytecode = abi.encodePacked(
+            type(ERC1967Proxy).creationCode,
+            abi.encode(address(impl), "")
+        );
+
+        address proxy = createX.deployCreate2(bytecode);
+    }
+}
+
+contract MyToken {}
+
+contract ERC1967Proxy {
+    constructor(address impl, bytes memory data) {}
+}
+"""
+        result = parser.parse_source(source, "SingleArgCreateX.s.sol")
+
+        # Single-arg deployCreate2 may not be detected by current implementation
+        # since it expects (salt, bytecode) pattern. This test ensures no errors.
+        assert len(result.parse_errors) == 0
