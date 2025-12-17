@@ -582,8 +582,12 @@ def check(path: str, output: str) -> None:
                     if cov.test_files:
                         for test_file in cov.test_files:
                             test_name = test_file.relative_to(analysis.project_root)
-                            fork_badge = " [cyan](fork)[/cyan]" if test_file in cov.fork_tests else ""
-                            run_badge = " [yellow](calls run())[/yellow]" if cov.test_calls_run else ""
+                            fork_badge = (
+                                " [cyan](fork)[/cyan]" if test_file in cov.fork_tests else ""
+                            )
+                            run_badge = (
+                                " [yellow](calls run())[/yellow]" if cov.test_calls_run else ""
+                            )
                             console.print(f"    └─ {test_name}{fork_badge}{run_badge}")
                     else:
                         console.print("    [dim]No tests found[/dim]")
@@ -644,16 +648,12 @@ def rules(category: str, severity: str, output: str) -> None:
         # Filter by category
         if category != "all":
             category_enum = RuleCategory(category)
-            all_rules = {
-                k: v for k, v in all_rules.items() if v.rule.category == category_enum
-            }
+            all_rules = {k: v for k, v in all_rules.items() if v.rule.category == category_enum}
 
         # Filter by severity
         if severity != "all":
             severity_enum = Severity(severity)
-            all_rules = {
-                k: v for k, v in all_rules.items() if v.rule.severity == severity_enum
-            }
+            all_rules = {k: v for k, v in all_rules.items() if v.rule.severity == severity_enum}
 
         if output == "json":
             # JSON output

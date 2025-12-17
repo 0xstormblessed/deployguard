@@ -85,3 +85,6 @@ output/
 *.bak
 temp/
 specs/
+
+# claude
+.claude

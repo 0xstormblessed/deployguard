@@ -68,7 +68,9 @@ class FoundryScriptParser:
     def __init__(self) -> None:
         """Initialize the solc-based parser."""
         self.current_file: Path | None = None
-        self.current_source_file: Path | None = None  # Tracks current file being analyzed (for inherited contracts)
+        self.current_source_file: Path | None = (
+            None  # Tracks current file being analyzed (for inherited contracts)
+        )
         self.source_code: str = ""
         self.source_lines: list[str] = []
 
@@ -593,9 +595,7 @@ class FoundryScriptParser:
 
         return validated_vars
 
-    def _extract_create2_salt_from_options(
-        self, options_node: dict[str, Any]
-    ) -> str | None:
+    def _extract_create2_salt_from_options(self, options_node: dict[str, Any]) -> str | None:
         """Extract salt from FunctionCallOptions node.
 
         In Solidity 0.8+, CREATE2 can be used via:
@@ -642,7 +642,6 @@ class FoundryScriptParser:
             return
 
         callee = expr.get("expression", {})
-
         # Handle FunctionCallOptions wrapper (for {value: X} syntax)
         if callee.get("nodeType") == "FunctionCallOptions":
             callee = callee.get("expression", {})
@@ -653,7 +652,13 @@ class FoundryScriptParser:
             base_expr = callee.get("expression", {})
 
             # Check for createX.deployCreate2 or similar patterns
-            if member_name in ("deployCreate2", "deployCreate", "deploy", "safeCreate2"):
+            if member_name in (
+                "deployCreate2",
+                "deployCreate",
+                "deploy",
+                "safeCreate2",
+                "deployCreate2AndInit",
+            ):
                 is_create2_factory = self._is_create2_factory(base_expr)
 
                 if is_create2_factory:
@@ -720,8 +725,9 @@ class FoundryScriptParser:
     ) -> ProxyDeployment | None:
         """Parse a CreateX deployCreate2() call to extract proxy deployment info.
 
-        CreateX pattern:
+        CreateX patterns:
             createX.deployCreate2(salt, bytecode)
+            createX.deployCreate2AndInit(salt, bytecode, init, values)
 
         Where bytecode is often:
             abi.encodePacked(type(ERC1967Proxy).creationCode, abi.encode(impl, initData))
@@ -729,6 +735,9 @@ class FoundryScriptParser:
         Or bytecode might be a variable:
             bytes memory bytecode = abi.encodePacked(...);
             createX.deployCreate2(salt, bytecode);
+
+        For deployCreate2AndInit, even if bytecode has empty init data, the separate
+        init parameter provides initialization, making it safe (atomic).
 
         Args:
             expr: FunctionCall AST node
@@ -760,11 +769,25 @@ class FoundryScriptParser:
             return None
 
         # Extract implementation and init data from bytecode expression
-        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(
-            bytecode_arg, proxy_type
-        )
+        impl_arg, init_data_arg = self._extract_proxy_args_from_bytecode(bytecode_arg, proxy_type)
 
         has_empty_init = self._is_empty_init_data(init_data_arg)
+
+        # For deployCreate2AndInit, check the 3rd argument (init parameter)
+        # Even if bytecode has empty init, the separate init param makes it safe
+        if method_name == "deployCreate2AndInit" and len(args) >= 3:
+            separate_init = self._extract_argument_source(args[2])
+            # Resolve variable if needed
+            if analysis and separate_init and re.match(r"^\w+$", separate_init.strip()):
+                var_name = separate_init.strip()
+                if var_name in analysis.implementation_variables:
+                    var_info = analysis.implementation_variables[var_name]
+                    if var_info.assigned_value:
+                        separate_init = var_info.assigned_value
+            # If separate init has actual data, it's safe (atomic)
+            if separate_init and not self._is_empty_init_data(separate_init):
+                has_empty_init = False
+                init_data_arg = separate_init
 
         return ProxyDeployment(
             proxy_type=proxy_type,
@@ -846,9 +869,7 @@ class FoundryScriptParser:
                 init_data_arg = init_data_arg.split("//")[0].strip()
         else:
             # Try abi.encodeCall pattern
-            encode_call_match = re.search(
-                r"abi\.encodeCall\s*\(.+\)", bytecode_expr, re.DOTALL
-            )
+            encode_call_match = re.search(r"abi\.encodeCall\s*\(.+\)", bytecode_expr, re.DOTALL)
             if encode_call_match:
                 # Has init call - not empty
                 init_data_arg = encode_call_match.group(0)
@@ -992,9 +1013,9 @@ class FoundryScriptParser:
         # Regex patterns for more flexible matching
         empty_regexes = [
             r'^bytes\s*\(\s*["\']?\s*["\']?\s*\)?$',  # bytes(""), bytes(''), bytes("")
-            r'^new\s+bytes\s*\(\s*0\s*\)$',  # new bytes(0)
+            r"^new\s+bytes\s*\(\s*0\s*\)$",  # new bytes(0)
             r'^["\']["\']$',  # "" or ''
-            r'^0x$',  # 0x
+            r"^0x$",  # 0x
         ]
 
         for pattern in empty_regexes:
@@ -1104,13 +1125,10 @@ class FoundryScriptParser:
                 return pragma_version
             # Try to find compatible version
             parts = pragma_version.split(".")
-            return (
-                self._get_latest_version_in_range(
-                    pragma_version,
-                    f"{parts[0]}.{int(parts[1]) + 1}.0",
-                )
-                or self._legacy_version_fallback(pragma_version)
-            )
+            return self._get_latest_version_in_range(
+                pragma_version,
+                f"{parts[0]}.{int(parts[1]) + 1}.0",
+            ) or self._legacy_version_fallback(pragma_version)
 
         # Handle >= or > ranges
         if ">=" in pragma_version or ">" in pragma_version:
