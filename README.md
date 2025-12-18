@@ -4,9 +4,9 @@
 
 ## ⚠️ Important Notes
 
-**DeployGuard is an opinionated tool** based on security experience and best practices. The rules and recommendations reflect real-world security lessons learned from auditing smart contract deployments.
+**DeployGuard is an opinionated tool** based on security experience and best practices. The rules, recommendations, and best practices enforced by DeployGuard reflect real-world security lessons learned from auditing smart contract deployments. While these opinions are grounded in practical security experience, teams may have different approaches that are equally valid for their specific use cases.
 
-**DeployGuard is NOT a security guarantee.** It helps catch common anti-patterns but:
+**DeployGuard is NOT a security guarantee.** This tool helps development teams follow best practices and established guidelines for smart contract deployments. It is designed to catch common anti-patterns and provide actionable recommendations, but:
 
 - Does **not** replace professional security audits
 - Does **not** guarantee the absence of vulnerabilities
