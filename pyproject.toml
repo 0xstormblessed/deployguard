@@ -10,9 +10,15 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
-    {name = "DeployGuard Contributors"}
+    {name = "stormblessed", email = "0xstormblessed@proton.me"}
 ]
 keywords = ["security", "solidity", "foundry", "smart-contracts", "deployment", "audit"]
+
+[project.urls]
+Homepage = "https://github.com/0xstormblessed/deployguard"
+Repository = "https://github.com/0xstormblessed/deployguard"
+Documentation = "https://github.com/0xstormblessed/deployguard#readme"
+"Bug Tracker" = "https://github.com/0xstormblessed/deployguard/issues"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -34,6 +40,7 @@ dependencies = [
     "packaging>=21.0",
     "eth-utils>=2.0.0",
     "web3>=6.0.0",
+    "pathspec>=0.11.0",
 ]
 
 [project.optional-dependencies]

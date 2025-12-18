@@ -20,7 +20,7 @@ Static rules analyze deployment scripts (`*.s.sol`) before they are executed.
 
 ### Proxy Rules (`proxy/`)
 
-Rules for detecting CPIMP (Clandestine Proxy Initialization Mempool Probe) and related proxy deployment vulnerabilities.
+Rules for detecting CPIMP (Clandestine Proxy In the Middle of Proxy) and related proxy deployment vulnerabilities.
 
 #### `NON_ATOMIC_INIT` - Non-Atomic Proxy Initialization
 

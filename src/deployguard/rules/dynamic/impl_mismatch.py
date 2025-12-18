@@ -21,7 +21,7 @@ RULE_IMPL_MISMATCH = Rule(
         "https://dedaub.com/blog/the-cpimp-attack-an-insanely-far-reaching-vulnerability-successfully-mitigated/",
     ],
     real_world_context=(
-        "Implementation mismatches can indicate a CPIMP (Clandestine Proxy Initialization Mempool Probe) attack. "
+        "Implementation mismatches can indicate a CPIMP (Clandestine Proxy In the Middle of Proxy) attack. "
         "Attackers monitor mempools for proxy deployments, then front-run to initialize with a malicious "
         "implementation or gain admin control. Dedaub identified CPIMP as affecting thousands of contracts "
         "across multiple chains. Always verify the on-chain implementation matches your expected deployment."
