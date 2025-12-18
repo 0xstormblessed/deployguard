@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "CLI tool for auditing Foundry deployment scripts for security vulnerabilities"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = "Apache-2.0"
 authors = [
     {name = "DeployGuard Contributors"}
 ]

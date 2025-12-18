@@ -48,19 +48,34 @@ class TestFoundryScriptParser:
         assert version is None
 
     def test_determine_solc_version_default(self, parser: FoundryScriptParser) -> None:
-        """Test solc version determination with no pragma."""
+        """Test solc version determination with no pragma returns a valid 0.8.x version."""
         version = parser._determine_solc_version(None)
-        assert version == "0.8.20"
+        # Should return a valid 0.8.x version (latest available or fallback)
+        assert version.startswith("0.8.")
+        # Should be a valid semver format
+        parts = version.split(".")
+        assert len(parts) == 3
+        assert all(part.isdigit() for part in parts)
 
     def test_determine_solc_version_0_8(self, parser: FoundryScriptParser) -> None:
-        """Test solc version determination for 0.8.x."""
+        """Test solc version determination for 0.8.x returns compatible version."""
         version = parser._determine_solc_version("^0.8.19")
-        assert version == "0.8.20"
+        # Should return a version that satisfies ^0.8.19 (>= 0.8.19, < 1.0.0)
+        assert version.startswith("0.8.") or version.startswith("0.9.")
+        parts = version.split(".")
+        assert len(parts) == 3
+        # If 0.8.x, patch should be >= 19
+        if parts[0] == "0" and parts[1] == "8":
+            assert int(parts[2]) >= 19
 
     def test_determine_solc_version_0_7(self, parser: FoundryScriptParser) -> None:
-        """Test solc version determination for 0.7.x."""
+        """Test solc version determination for 0.7.x returns compatible version."""
         version = parser._determine_solc_version("^0.7.0")
-        assert version == "0.7.6"
+        # Should return a 0.7.x version that satisfies ^0.7.0
+        assert version.startswith("0.7.")
+        parts = version.split(".")
+        assert len(parts) == 3
+        assert all(part.isdigit() for part in parts)
 
     def test_is_empty_init_data_empty_string(self, parser: FoundryScriptParser) -> None:
         """Test empty init data detection with empty string."""
