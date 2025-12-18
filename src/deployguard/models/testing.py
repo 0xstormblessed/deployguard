@@ -72,6 +72,9 @@ class FoundryProject:
         Returns:
             FoundryProject if found, None otherwise
         """
+        # Resolve to absolute path first - relative paths don't walk up correctly
+        # because Path(".").parent == Path("."), causing the loop to exit early
+        start_path = start_path.resolve()
         # Walk up to find foundry.toml
         current = start_path if start_path.is_dir() else start_path.parent
         while current != current.parent:

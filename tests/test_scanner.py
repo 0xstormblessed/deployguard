@@ -130,6 +130,38 @@ class TestSortingAndOrdering:
         assert scripts == sorted(scripts)
 
 
+class TestRelativePathScanning:
+    """Test scanning from relative paths."""
+
+    def test_scan_from_relative_subdirectory(self, foundry_project_path, monkeypatch):
+        """Test scanning from relative path like 'script/' finds foundry.toml in parent.
+
+        This reproduces a bug where running `deployguard audit script/` from within
+        a Foundry project fails because relative path walk-up doesn't work correctly.
+        Path(".").parent == Path("."), so the loop exits before finding foundry.toml.
+        """
+        # Change to the project directory
+        monkeypatch.chdir(foundry_project_path)
+
+        # Scan from relative "script/" path - this should find foundry.toml in parent
+        scanner = DeploymentScriptScanner()
+        scripts = scanner.scan(Path("script"))
+
+        assert isinstance(scripts, list)
+        assert len(scripts) > 0
+        assert all(s.suffix == ".sol" for s in scripts)
+
+    def test_scan_from_relative_current_dir(self, foundry_project_path, monkeypatch):
+        """Test scanning from '.' relative path works."""
+        monkeypatch.chdir(foundry_project_path)
+
+        scanner = DeploymentScriptScanner()
+        scripts = scanner.scan(Path("."))
+
+        assert isinstance(scripts, list)
+        assert len(scripts) > 0
+
+
 class TestNestedDirectoryMatching:
     """Test path matching for nested directories."""
 
