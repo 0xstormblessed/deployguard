@@ -187,10 +187,10 @@ deployguard rules -o json
 | Rule | Severity | Description |
 |------|----------|-------------|
 | `IMPL_MISMATCH` | Critical | On-chain implementation doesn't match expected |
-| `SHADOW_CONTRACT` | Critical | Proxy delegates to unexpected contract |
 | `UNINITIALIZED_PROXY` | Critical | Proxy is not initialized |
 | `ADMIN_MISMATCH` | High | Admin slot doesn't match expected |
 | `NON_STANDARD_PROXY` | Medium | Non-standard proxy pattern detected |
+| `DELEGATECALL_IMPL` | Info | Implementation contains DELEGATECALL (expected for UUPS) |
 
 ## CI/CD Integration
 

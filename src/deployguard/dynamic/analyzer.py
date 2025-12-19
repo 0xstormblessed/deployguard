@@ -340,4 +340,10 @@ async def verify_proxy(
             findings=findings,
             summary=summary,
             exit_code=exit_code,
+            actual_implementation=proxy_state.implementation_slot.decoded_address,
+            actual_admin=(
+                proxy_state.admin_slot.decoded_address
+                if proxy_state.admin_slot
+                else None
+            ),
         )

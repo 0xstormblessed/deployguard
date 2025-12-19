@@ -15,16 +15,16 @@ from deployguard.models.dynamic import (
 from deployguard.models.rules import Severity
 from deployguard.rules.dynamic import (
     RULE_IMPL_MISMATCH,
-    RULE_SHADOW_CONTRACT,
+    RULE_DELEGATECALL_IMPL,
     RULE_UNINITIALIZED_PROXY,
     RULE_ADMIN_MISMATCH,
     RULE_NON_STANDARD_PROXY,
     check_admin_mismatch,
     check_implementation_mismatch,
     check_non_standard_proxy,
-    check_shadow_contract,
     check_uninitialized_proxy,
 )
+from deployguard.rules.dynamic.delegatecall_impl import rule_delegatecall_impl
 
 
 class TestDG101ImplementationMismatch:
@@ -109,11 +109,18 @@ class TestDG101ImplementationMismatch:
         assert RULE_IMPL_MISMATCH.remediation is not None
 
 
-class TestDG102ShadowContract:
-    """Tests for SHADOW_CONTRACT: Shadow Contract Detection."""
+class TestDelegatecallImpl:
+    """Tests for DELEGATECALL_IMPL: Implementation Contains DELEGATECALL."""
+
+    @staticmethod
+    async def _check(proxy_state: ProxyState) -> list:
+        """Helper to run async check."""
+        return await rule_delegatecall_impl.check(proxy_state, "0x0", None)
 
     def test_no_violation_without_delegatecall(self) -> None:
         """Test no violation when implementation has no DELEGATECALL."""
+        import asyncio
+
         proxy_state = ProxyState(
             proxy_address=Address("0x1234567890123456789012345678901234567890"),
             implementation_slot=StorageSlotResult(
@@ -125,23 +132,23 @@ class TestDG102ShadowContract:
                 decoded_address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
                 block_number=1000,
             ),
+            implementation_bytecode_analysis=BytecodeAnalysis(
+                address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
+                bytecode="0x6080604052348015600f57600080fd5b50",
+                bytecode_hash="0xabcd",
+                has_delegatecall=False,
+                has_selfdestruct=False,
+                is_proxy_pattern=False,
+            ),
         )
 
-        bytecode_analysis = BytecodeAnalysis(
-            address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
-            bytecode="0x6080604052348015600f57600080fd5b50",
-            bytecode_hash="0xabcd",
-            has_delegatecall=False,
-            has_selfdestruct=False,
-            is_proxy_pattern=False,
-        )
-
-        result = check_shadow_contract(proxy_state, bytecode_analysis)
-
-        assert result is None
+        results = asyncio.run(self._check(proxy_state))
+        assert len(results) == 0
 
     def test_violation_with_delegatecall(self) -> None:
         """Test violation when implementation contains DELEGATECALL."""
+        import asyncio
+
         proxy_state = ProxyState(
             proxy_address=Address("0x1234567890123456789012345678901234567890"),
             implementation_slot=StorageSlotResult(
@@ -153,34 +160,33 @@ class TestDG102ShadowContract:
                 decoded_address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
                 block_number=1000,
             ),
+            implementation_bytecode_analysis=BytecodeAnalysis(
+                address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
+                bytecode="0x6080604052F4",  # Contains DELEGATECALL (0xF4)
+                bytecode_hash="0xabcd",
+                has_delegatecall=True,
+                has_selfdestruct=False,
+                is_proxy_pattern=True,
+                risk_indicators=["Contains DELEGATECALL opcode"],
+            ),
         )
 
-        bytecode_analysis = BytecodeAnalysis(
-            address=Address("0xa1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"),
-            bytecode="0x6080604052F4",  # Contains DELEGATECALL (0xF4)
-            bytecode_hash="0xabcd",
-            has_delegatecall=True,
-            has_selfdestruct=False,
-            is_proxy_pattern=True,
-            risk_indicators=["Contains DELEGATECALL opcode"],
-        )
+        results = asyncio.run(self._check(proxy_state))
 
-        result = check_shadow_contract(proxy_state, bytecode_analysis)
-
-        assert result is not None
-        assert result.rule.rule_id == "SHADOW_CONTRACT"
-        assert result.severity == Severity.HIGH
-        assert "shadow" in result.message.lower()
-        assert result.bytecode_data == bytecode_analysis
-        assert result.storage_data == proxy_state.implementation_slot
+        assert len(results) == 1
+        result = results[0]
+        assert result.rule.rule_id == "DELEGATECALL_IMPL"
+        assert result.severity == Severity.INFO
+        assert "delegatecall" in result.message.lower()
         assert result.context["has_selfdestruct"] is False
         assert result.context["is_proxy_pattern"] is True
 
     def test_rule_metadata(self) -> None:
         """Test rule metadata is correct."""
-        assert RULE_SHADOW_CONTRACT.rule_id == "SHADOW_CONTRACT"
-        assert RULE_SHADOW_CONTRACT.severity == Severity.HIGH
-        assert len(RULE_SHADOW_CONTRACT.references) > 0
+        assert RULE_DELEGATECALL_IMPL.rule_id == "DELEGATECALL_IMPL"
+        # INFO severity - DELEGATECALL is expected for UUPS proxies
+        assert RULE_DELEGATECALL_IMPL.severity == Severity.INFO
+        assert len(RULE_DELEGATECALL_IMPL.references) > 0
 
 
 class TestDG103UninitializedProxy:

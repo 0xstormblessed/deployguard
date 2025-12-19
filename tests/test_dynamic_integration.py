@@ -168,8 +168,8 @@ async def test_full_proxy_verification_uninitialized() -> None:
 
 
 @pytest.mark.asyncio
-async def test_full_proxy_verification_shadow_contract() -> None:
-    """Test end-to-end proxy verification with shadow contract (SHADOW_CONTRACT)."""
+async def test_full_proxy_verification_delegatecall_impl() -> None:
+    """Test end-to-end proxy verification with DELEGATECALL in implementation."""
     mock_rpc = AsyncMock()
 
     proxy_addr = Address("0x1234567890123456789012345678901234567890")
@@ -202,17 +202,18 @@ async def test_full_proxy_verification_shadow_contract() -> None:
             "https://eth-mainnet.g.alchemy.com/v2/test",
         )
 
-    # Should have SHADOW_CONTRACT violation
+    # Should have DELEGATECALL_IMPL violation (INFO severity - expected for UUPS)
     assert report.summary.total_findings >= 1
-    assert report.summary.high_count >= 1
-    assert report.exit_code == 1
+    assert report.summary.info_count >= 1
+    # INFO findings don't cause failure
+    assert report.exit_code == 0
 
-    # Find SHADOW_CONTRACT finding
-    dg102_findings = [f for f in report.findings if f.rule_id == "SHADOW_CONTRACT"]
-    assert len(dg102_findings) == 1
-    finding = dg102_findings[0]
-    assert finding.severity.value == "high"
-    assert "shadow" in finding.description.lower()
+    # Find DELEGATECALL_IMPL finding
+    delegatecall_findings = [f for f in report.findings if f.rule_id == "DELEGATECALL_IMPL"]
+    assert len(delegatecall_findings) == 1
+    finding = delegatecall_findings[0]
+    assert finding.severity.value == "info"
+    assert "delegatecall" in finding.description.lower()
 
 
 @pytest.mark.asyncio
@@ -328,14 +329,14 @@ async def test_full_proxy_verification_multiple_issues() -> None:
     # Should have multiple violations
     assert report.summary.total_findings >= 3
     assert report.summary.critical_count >= 1  # IMPL_MISMATCH
-    assert report.summary.high_count >= 1  # SHADOW_CONTRACT
+    assert report.summary.info_count >= 1  # DELEGATECALL_IMPL (INFO - expected for UUPS)
     assert report.summary.medium_count >= 1  # ADMIN_MISMATCH
     assert report.exit_code == 1
 
     # Verify all expected findings
     rule_ids = {f.rule_id for f in report.findings}
     assert "IMPL_MISMATCH" in rule_ids  # Implementation mismatch
-    assert "SHADOW_CONTRACT" in rule_ids  # Shadow contract
+    assert "DELEGATECALL_IMPL" in rule_ids  # DELEGATECALL in impl (INFO)
     assert "ADMIN_MISMATCH" in rule_ids  # Admin mismatch
 
 

@@ -299,17 +299,17 @@ Implementation mismatches can indicate a CPIMP attack where an attacker front-ra
 
 ---
 
-#### `SHADOW_CONTRACT` - Shadow Contract Detection
+#### `DELEGATECALL_IMPL` - Implementation Contains DELEGATECALL
 
 | Property | Value |
 |----------|-------|
-| **Severity** | HIGH |
-| **File** | `dynamic/shadow_contract.py` |
+| **Severity** | INFO |
+| **File** | `dynamic/delegatecall_impl.py` |
 
-Detects when implementation contract contains `DELEGATECALL`, suggesting a malicious middleman proxy.
+Detects when implementation contract contains `DELEGATECALL` opcode.
 
 **Why it matters:**
-A shadow contract can intercept all calls and redirect to attacker-controlled code while appearing legitimate.
+DELEGATECALL in the implementation is expected for UUPS proxies (upgrade logic). For non-UUPS patterns, this may indicate a middleman proxy. Verify this matches your expected proxy pattern.
 
 ---
 

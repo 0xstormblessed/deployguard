@@ -400,6 +400,14 @@ def verify(proxy_address: str, rpc: str, expected: str, admin: str | None, outpu
                     "analysis_type": report.analysis_type.value,
                     "target_addresses": report.target_addresses,
                     "rpc_url": report.rpc_url,
+                    "expected_implementation": expected,
+                    "actual_implementation": report.actual_implementation,
+                    "implementation_matched": (
+                        report.actual_implementation
+                        and report.actual_implementation.lower() == expected.lower()
+                    ),
+                    "expected_admin": admin,
+                    "actual_admin": report.actual_admin,
                     "summary": {
                         "total_findings": report.summary.total_findings,
                         "critical": report.summary.critical_count,
@@ -431,8 +439,28 @@ def verify(proxy_address: str, rpc: str, expected: str, admin: str | None, outpu
                 console.print("\n[bold]Proxy Verification Report[/bold]")
                 console.print(f"Proxy: {proxy_address}")
                 console.print(f"Expected Implementation: {expected}")
+                if report.actual_implementation:
+                    if report.actual_implementation.lower() == expected.lower():
+                        console.print(
+                            f"[bold green]✓ Implementation MATCHED:[/bold green] {report.actual_implementation}"
+                        )
+                    else:
+                        console.print(
+                            f"[bold red]✗ Implementation MISMATCH:[/bold red] {report.actual_implementation}"
+                        )
+                else:
+                    console.print("[bold red]✗ No implementation found (uninitialized proxy)[/bold red]")
                 if admin:
                     console.print(f"Expected Admin: {admin}")
+                    if report.actual_admin:
+                        if report.actual_admin.lower() == admin.lower():
+                            console.print(
+                                f"[bold green]✓ Admin MATCHED:[/bold green] {report.actual_admin}"
+                            )
+                        else:
+                            console.print(
+                                f"[bold red]✗ Admin MISMATCH:[/bold red] {report.actual_admin}"
+                            )
                 console.print()
 
                 # Summary table

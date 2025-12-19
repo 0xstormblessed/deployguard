@@ -113,6 +113,9 @@ class AnalysisReport:
     findings: list[Finding] = field(default_factory=list)
     summary: ReportSummary = field(default_factory=ReportSummary)
     exit_code: int = 0
+    # Dynamic analysis fields
+    actual_implementation: Address | None = None
+    actual_admin: Address | None = None
 
 
 @dataclass
