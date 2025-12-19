@@ -1152,3 +1152,79 @@ contract MainScript is VulnerableBase {
             "deployCreate2" in deployment.location.line_content
             or "createX" in deployment.location.line_content
         )
+
+
+class TestFoundryProjectSolcVersion:
+    """Test FoundryProject solc version detection from foundry.toml."""
+
+    def test_get_solc_version_from_foundry_toml(self, tmp_path: Path) -> None:
+        """Test that solc_version is correctly read from foundry.toml.
+
+        Foundry uses 'solc_version' key in foundry.toml, not 'solc'.
+        """
+        from deployguard.static.parsers.foundry_project import FoundryProject
+
+        # Create foundry.toml with solc_version (the key Foundry actually uses)
+        foundry_toml = tmp_path / "foundry.toml"
+        foundry_toml.write_text(
+            """[profile.default]
+src = "contracts"
+test = "test"
+solc_version = "0.8.30"
+"""
+        )
+
+        # Create a dummy script file
+        script_dir = tmp_path / "script"
+        script_dir.mkdir()
+        script_file = script_dir / "Deploy.s.sol"
+        script_file.write_text("// dummy")
+
+        # Create FoundryProject and check version detection
+        project = FoundryProject(script_file)
+        assert project.get_solc_version() == "0.8.30", (
+            "FoundryProject should read solc_version from foundry.toml"
+        )
+
+    def test_get_solc_version_none_when_not_specified(self, tmp_path: Path) -> None:
+        """Test that get_solc_version returns None when not specified."""
+        from deployguard.static.parsers.foundry_project import FoundryProject
+
+        # Create foundry.toml without solc_version
+        foundry_toml = tmp_path / "foundry.toml"
+        foundry_toml.write_text(
+            """[profile.default]
+src = "src"
+test = "test"
+"""
+        )
+
+        script_dir = tmp_path / "script"
+        script_dir.mkdir()
+        script_file = script_dir / "Deploy.s.sol"
+        script_file.write_text("// dummy")
+
+        project = FoundryProject(script_file)
+        assert project.get_solc_version() is None
+
+    def test_get_solc_version_root_level(self, tmp_path: Path) -> None:
+        """Test that solc_version at root level is detected."""
+        from deployguard.static.parsers.foundry_project import FoundryProject
+
+        # Create foundry.toml with root-level solc_version
+        foundry_toml = tmp_path / "foundry.toml"
+        foundry_toml.write_text(
+            """solc_version = "0.8.25"
+
+[profile.default]
+src = "src"
+"""
+        )
+
+        script_dir = tmp_path / "script"
+        script_dir.mkdir()
+        script_file = script_dir / "Deploy.s.sol"
+        script_file.write_text("// dummy")
+
+        project = FoundryProject(script_file)
+        assert project.get_solc_version() == "0.8.25"

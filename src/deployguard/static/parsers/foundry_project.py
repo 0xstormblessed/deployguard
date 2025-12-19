@@ -425,14 +425,15 @@ class FoundryProject:
                 data = tomllib.load(f)
 
             # Check [profile.default] first, then root
+            # Foundry uses "solc_version" key (not "solc")
             if "profile" in data and "default" in data["profile"]:
-                solc = data["profile"]["default"].get("solc")
+                solc = data["profile"]["default"].get("solc_version")
                 if solc:
                     return str(solc)
 
             # Check root level
-            if "solc" in data:
-                return str(data["solc"])
+            if "solc_version" in data:
+                return str(data["solc_version"])
 
         except Exception:
             pass

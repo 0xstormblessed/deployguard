@@ -47,11 +47,11 @@ FORK_PATTERNS = [
 def find_test_files(deploy_script: Path, project: FoundryProject) -> list[Path]:
     """Find test files that might test a deployment script.
 
-    This function looks for test files using common naming conventions:
-    - Deploy.s.sol → Deploy.t.sol
-    - Deploy.s.sol → DeployTest.t.sol
-    - Deploy.s.sol → Deploy.fork.t.sol
-    - Deploy.s.sol → test/integration/Deploy.t.sol
+    This function looks for test files using common naming conventions,
+    searching recursively through all subdirectories:
+    - Deploy.s.sol → **/Deploy.t.sol
+    - Deploy.s.sol → **/DeployTest.t.sol
+    - Deploy.s.sol → **/Deploy.fork.t.sol
 
     Args:
         deploy_script: Path to deployment script
@@ -69,26 +69,23 @@ def find_test_files(deploy_script: Path, project: FoundryProject) -> list[Path]:
     test_dir = project.test_dir
     script_name = deploy_script.stem.replace(".s", "")  # Deploy.s.sol → Deploy
 
-    candidates = []
+    if not test_dir.exists():
+        return []
 
-    # Pattern 1: Direct name match
-    # Deploy.s.sol → Deploy.t.sol
-    candidates.append(test_dir / f"{script_name}.t.sol")
+    matches = []
 
-    # Pattern 2: Test suffix
-    # Deploy.s.sol → DeployTest.t.sol
-    candidates.append(test_dir / f"{script_name}Test.t.sol")
+    # Search recursively for matching test files
+    # Pattern 1: Direct name match - Deploy.t.sol
+    matches.extend(test_dir.glob(f"**/{script_name}.t.sol"))
 
-    # Pattern 3: Fork test
-    # Deploy.s.sol → Deploy.fork.t.sol
-    candidates.append(test_dir / f"{script_name}.fork.t.sol")
+    # Pattern 2: Test suffix - DeployTest.t.sol
+    matches.extend(test_dir.glob(f"**/{script_name}Test.t.sol"))
 
-    # Pattern 4: Integration directory
-    # Deploy.s.sol → test/integration/Deploy.t.sol
-    candidates.append(test_dir / "integration" / f"{script_name}.t.sol")
+    # Pattern 3: Fork test - Deploy.fork.t.sol
+    matches.extend(test_dir.glob(f"**/{script_name}.fork.t.sol"))
 
-    # Return existing files
-    return [f for f in candidates if f.exists()]
+    # Remove duplicates and return
+    return list(set(matches))
 
 
 def find_imported_scripts(test_content: str) -> list[str]:

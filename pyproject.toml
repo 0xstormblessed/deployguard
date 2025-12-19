@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "deployguard"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI tool for auditing Foundry deployment scripts for security vulnerabilities"
 readme = "README.md"
 requires-python = ">=3.10"

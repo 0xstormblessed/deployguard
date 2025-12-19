@@ -259,3 +259,114 @@ contract DeployForkTest is Test {
 
     assert coverage.has_fork_test is True
     assert len(coverage.fork_tests) > 0
+
+
+def test_find_test_files_in_subfolders(tmp_path: Path):
+    """Test finding test files in subfolders of test directory.
+
+    Test files should be found in any subfolder, e.g.:
+    - test/scripts/Deploy.t.sol
+    - test/integration/Deploy.t.sol
+    - test/unit/scripts/Deploy.t.sol
+    """
+    # Create foundry.toml
+    foundry_toml = tmp_path / "foundry.toml"
+    foundry_toml.write_text("[profile.default]\n")
+
+    (tmp_path / "script").mkdir()
+    (tmp_path / "test").mkdir()
+
+    # Create a deployment script
+    deploy_script = tmp_path / "script" / "Deploy.s.sol"
+    deploy_script.write_text("contract Deploy {}")
+
+    # Create test file in a subfolder (test/scripts/)
+    scripts_test_dir = tmp_path / "test" / "scripts"
+    scripts_test_dir.mkdir()
+    test_in_subfolder = scripts_test_dir / "Deploy.t.sol"
+    test_in_subfolder.write_text("contract DeployTest {}")
+
+    project = FoundryProject.detect(tmp_path)
+    test_files = find_test_files(deploy_script, project)
+
+    assert len(test_files) == 1, (
+        f"Expected to find test in subfolder test/scripts/Deploy.t.sol, "
+        f"but found: {test_files}"
+    )
+    assert test_files[0].name == "Deploy.t.sol"
+    assert "scripts" in str(test_files[0])
+
+
+def test_find_test_files_in_deeply_nested_subfolders(tmp_path: Path):
+    """Test finding test files in deeply nested subfolders."""
+    # Create foundry.toml
+    foundry_toml = tmp_path / "foundry.toml"
+    foundry_toml.write_text("[profile.default]\n")
+
+    (tmp_path / "script").mkdir()
+    (tmp_path / "test").mkdir()
+
+    # Create a deployment script
+    deploy_script = tmp_path / "script" / "Upgrade.s.sol"
+    deploy_script.write_text("contract Upgrade {}")
+
+    # Create test file in deeply nested subfolder
+    nested_dir = tmp_path / "test" / "unit" / "scripts" / "upgrades"
+    nested_dir.mkdir(parents=True)
+    test_in_nested = nested_dir / "Upgrade.t.sol"
+    test_in_nested.write_text("contract UpgradeTest {}")
+
+    project = FoundryProject.detect(tmp_path)
+    test_files = find_test_files(deploy_script, project)
+
+    assert len(test_files) == 1, (
+        f"Expected to find test in nested subfolder, but found: {test_files}"
+    )
+    assert test_files[0].name == "Upgrade.t.sol"
+
+
+def test_no_test_rule_finds_tests_in_subfolders(tmp_path: Path):
+    """Test that NO_TEST rule finds tests in subfolders.
+
+    The NO_TEST rule in audit should use the same logic as find_test_files
+    to detect tests in subfolders like test/scripts/Deploy.t.sol.
+    """
+    from deployguard.rules.testing.no_test import rule_no_test
+    from deployguard.models.static import ScriptAnalysis, ScriptType
+
+    # Create foundry.toml
+    foundry_toml = tmp_path / "foundry.toml"
+    foundry_toml.write_text("[profile.default]\n")
+
+    (tmp_path / "script").mkdir()
+    (tmp_path / "test").mkdir()
+
+    # Create a deployment script
+    deploy_script = tmp_path / "script" / "Deploy.s.sol"
+    deploy_script.write_text("contract Deploy {}")
+
+    # Create test file in a subfolder (test/scripts/)
+    scripts_test_dir = tmp_path / "test" / "scripts"
+    scripts_test_dir.mkdir()
+    test_in_subfolder = scripts_test_dir / "Deploy.t.sol"
+    test_in_subfolder.write_text("contract DeployTest {}")
+
+    # Create a minimal ScriptAnalysis
+    analysis = ScriptAnalysis(
+        file_path=str(deploy_script),
+        script_type=ScriptType.FOUNDRY,
+        proxy_deployments=[],
+        tx_boundaries=[],
+        implementation_variables={},
+        parse_errors=[],
+        parse_warnings=[],
+    )
+
+    # Run the NO_TEST rule
+    violations = rule_no_test.check(analysis)
+
+    # Should NOT flag as missing test since test exists in subfolder
+    assert len(violations) == 0, (
+        f"NO_TEST rule should find test in subfolder test/scripts/Deploy.t.sol, "
+        f"but reported: {[v.message for v in violations]}"
+    )
