@@ -274,6 +274,10 @@ Status: FAILED
 ================================================================================
 ```
 
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, code style, and PR guidelines.
+
 ## License
 
 DeployGuard is licensed under the **Apache License 2.0**.
