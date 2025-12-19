@@ -13,12 +13,6 @@ authors = [
     {name = "stormblessed", email = "0xstormblessed@proton.me"}
 ]
 keywords = ["security", "solidity", "foundry", "smart-contracts", "deployment", "audit"]
-
-[project.urls]
-Homepage = "https://github.com/0xstormblessed/deployguard"
-Repository = "https://github.com/0xstormblessed/deployguard"
-Documentation = "https://github.com/0xstormblessed/deployguard#readme"
-"Bug Tracker" = "https://github.com/0xstormblessed/deployguard/issues"
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -29,7 +23,6 @@ classifiers = [
     "Topic :: Security",
     "Topic :: Software Development :: Quality Assurance",
 ]
-
 dependencies = [
     "click>=8.0.0",
     "rich>=13.0.0",
@@ -56,6 +49,12 @@ dev = [
 
 [project.scripts]
 deployguard = "deployguard.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/0xstormblessed/deployguard"
+Repository = "https://github.com/0xstormblessed/deployguard"
+Documentation = "https://github.com/0xstormblessed/deployguard#readme"
+"Bug Tracker" = "https://github.com/0xstormblessed/deployguard/issues"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
